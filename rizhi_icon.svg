@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">日织 · 智能秘书应用图标</title>
+  <desc id="desc">温暖的太阳形象、相互交织的橙蓝色丝带，以及清单和提示星芒，象征日程编织与智能秘书。</desc>
+  <defs>
+    <linearGradient id="back" x1="0" y1="0" x2=".25" y2="1" objectBoundingBox="true">
+      <stop offset="0" stop-color="#FFF9E9"/><stop offset=".38" stop-color="#FFF5E8"/>
+      <stop offset=".76" stop-color="#B5E5E8"/><stop offset="1" stop-color="#489BC2"/>
+    </linearGradient>
+    <radialGradient id="sunOuter" cx=".43" cy=".35" r=".75">
+      <stop stop-color="#FFECA6"/><stop offset=".42" stop-color="#FFDC6C"/><stop offset=".78" stop-color="#FFB84A"/><stop offset="1" stop-color="#FF9139"/>
+    </radialGradient>
+    <radialGradient id="sunFace" cx=".42" cy=".32" r=".77">
+      <stop stop-color="#FFFCDC"/><stop offset=".68" stop-color="#FFF3AD"/><stop offset="1" stop-color="#FFDB70"/>
+    </radialGradient>
+    <linearGradient id="blueRibbon" x1="0" y1="0" x2="1" y2="1" objectBoundingBox="true">
+      <stop offset="0" stop-color="#5CB5DD"/><stop offset=".28" stop-color="#2A99CE"/><stop offset=".55" stop-color="#64DAD4"/><stop offset=".83" stop-color="#B6E8DE"/><stop offset="1" stop-color="#2C91C0"/>
+    </linearGradient>
+    <linearGradient id="blueLight" x1=".1" y1="0" x2=".85" y2="1" objectBoundingBox="true">
+      <stop offset="0" stop-color="#B5EFFF"/><stop offset=".52" stop-color="#42A9D5"/><stop offset="1" stop-color="#126FAF"/>
+    </linearGradient>
+    <linearGradient id="warmRibbon" x1="0" y1="0" x2=".93" y2=".93" objectBoundingBox="true">
+      <stop offset="0" stop-color="#FFF0B5"/><stop offset=".26" stop-color="#FFCF6F"/><stop offset=".64" stop-color="#FFAC5D"/><stop offset="1" stop-color="#F7854D"/>
+    </linearGradient>
+    <linearGradient id="creamRibbon" x1="0" y1="0" x2="1" y2=".8" objectBoundingBox="true">
+      <stop offset="0" stop-color="#FFEBC0"/><stop offset=".38" stop-color="#FFF9D8"/><stop offset=".73" stop-color="#FFE8A6"/><stop offset="1" stop-color="#F8D9A9"/>
+    </linearGradient>
+    <linearGradient id="cardFill" x1="0" y1="0" x2="1" y2="1" objectBoundingBox="true">
+      <stop stop-color="#FFFDF0" stop-opacity=".98"/><stop offset="1" stop-color="#E8F8ED" stop-opacity=".94"/>
+    </linearGradient>
+    <linearGradient id="eye" x1="0" y1="0" x2=".7" y2="1" objectBoundingBox="true">
+      <stop stop-color="#FFAF3B"/><stop offset="1" stop-color="#D8792B"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="0" y2="1" objectBoundingBox="true">
+      <stop stop-color="#FFBC43"/><stop offset="1" stop-color="#FFE27B"/>
+    </linearGradient>
+    <radialGradient id="glowGold"><stop stop-color="#FFF1BA" stop-opacity=".84"/><stop offset="1" stop-color="#FFF1BA" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowCyan"><stop stop-color="#50D4DA" stop-opacity=".44"/><stop offset="1" stop-color="#50D4DA" stop-opacity="0"/></radialGradient>
+    <filter id="softShadow" x="-.35" y="-.35" width="1.7" height="1.75"><feGaussianBlur in="SourceAlpha" stdDeviation="14" result="b"/><feOffset dy="17" result="o"/><feComponentTransfer><feFuncA type="linear" slope=".20"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glossShadow" x="-.2" y="-.3" width="1.4" height="1.6"><feGaussianBlur in="SourceAlpha" stdDeviation="8" result="b"/><feOffset in="b" dy="10" result="o"/><feComponentTransfer in="o" result="a"><feFuncA type="linear" slope=".19"/></feComponentTransfer><feMerge><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <clipPath id="squircle"><rect x="48" y="48" width="928" height="928" rx="224"/></clipPath>
+    <path id="blueOrbit" d="M244 658 C180 559 249 450 360 456 C462 458 516 566 620 517 C705 478 735 324 816 351 C943 394 922 605 818 761 C690 944 434 923 305 794 C279 769 248 713 244 658"/>
+    <path id="goldBand" d="M164 558 C202 454 292 442 366 472 C473 511 531 631 666 655 C766 674 846 623 862 586"/>
+    <path id="creamBand" d="M169 593 C153 680 214 751 315 747 C432 741 493 662 615 588 C705 532 789 515 858 565"/>
+  </defs>
+
+  <!-- Rounded app tile: transparent outside the corners -->
+  <g clip-path="url(#squircle)">
+    <rect x="48" y="48" width="928" height="928" fill="url(#back)"/>
+    <ellipse cx="455" cy="310" rx="465" ry="363" fill="url(#glowGold)"/>
+    <ellipse cx="684" cy="760" rx="550" ry="390" fill="url(#glowCyan)"/>
+
+    <!-- Assistant glow and rays behind the symbol -->
+    <g fill="url(#ray)" opacity=".99">
+      <rect x="489" y="125" width="40" height="82" rx="20"/>
+      <rect x="300" y="185" width="40" height="86" rx="20" transform="rotate(-44 320 228)"/>
+      <rect x="683" y="183" width="40" height="86" rx="20" transform="rotate(44 703 226)"/>
+      <rect x="199" y="295" width="40" height="73" rx="20" transform="rotate(-70 219 332)"/>
+    </g>
+
+    <!-- Cool woven thread in rear -->
+    <use xlink:href="#blueOrbit" fill="none" stroke="#E4FFF6" stroke-width="151" opacity=".62"/>
+    <use xlink:href="#blueOrbit" fill="none" stroke="url(#blueRibbon)" stroke-width="139" stroke-linecap="round" stroke-linejoin="round" filter="url(#softShadow)"/>
+    <path d="M294 619 C222 526 293 472 365 497 C473 529 511 608 626 555 C727 509 745 364 812 389 C882 415 872 581 810 692" fill="none" stroke="#D2F6F5" stroke-opacity=".65" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- Sun motif -->
+    <circle cx="507" cy="478" r="260" fill="#FFF2B6" opacity=".42"/>
+    <circle cx="507" cy="473" r="244" fill="url(#sunOuter)" filter="url(#glossShadow)"/>
+    <circle cx="505" cy="503" r="176" fill="url(#sunFace)"/>
+    <ellipse cx="452" cy="422" rx="16.5" ry="30" fill="url(#eye)"/>
+    <ellipse cx="589" cy="427" rx="16.5" ry="30" fill="url(#eye)"/>
+
+    <!-- Warm thread: top-left strand -->
+    <use xlink:href="#goldBand" fill="none" stroke="#FFF9E0" stroke-width="117" opacity=".95"/>
+    <use xlink:href="#goldBand" fill="none" stroke="url(#warmRibbon)" stroke-width="109" stroke-linecap="round" filter="url(#glossShadow)"/>
+    <path d="M174 541 C212 468 289 468 359 492 C476 530 525 635 655 670" fill="none" stroke="#FFF9DF" stroke-width="5" stroke-linecap="round" opacity=".89"/>
+
+    <!-- Memo and calendar: lower-right, tucked into weave -->
+    <g transform="rotate(-8 764 709)" filter="url(#glossShadow)">
+      <rect x="636" y="567" width="254" height="264" rx="47" fill="url(#cardFill)" stroke="#FFFFFF" stroke-width="4"/>
+      <g fill="none" stroke="#A4CAD4" stroke-width="21" stroke-linecap="round" opacity=".67">
+        <path d="M738 633 h95"/><path d="M738 699 h95"/><path d="M738 766 h77"/>
+      </g>
+      <circle cx="683" cy="633" r="14" fill="#FFB33E"/>
+      <circle cx="683" cy="700" r="14" fill="#4EB8E3"/>
+      <circle cx="683" cy="767" r="14" fill="#77D5BC"/>
+    </g>
+
+    <!-- Foreground strand crossing over the memo, open infinity-weave form -->
+    <use xlink:href="#creamBand" fill="none" stroke="#FFFFFF" stroke-width="118" opacity=".88"/>
+    <use xlink:href="#creamBand" fill="none" stroke="url(#creamRibbon)" stroke-width="109" stroke-linecap="round" stroke-linejoin="round" filter="url(#glossShadow)"/>
+    <path d="M171 588 C154 679 214 734 308 727 C434 722 489 637 611 563 C726 505 795 516 854 556" fill="none" stroke="#FFFEF0" stroke-width="5" stroke-linecap="round" opacity=".95"/>
+
+    <!-- Tiny assistant notification sparkle -->
+    <path d="M788 357 C791 389 799 399 825 408 C800 416 791 429 788 458 C784 426 775 417 748 408 C777 397 784 385 788 357 Z" fill="#FFF9D6" stroke="#FFFFFF" stroke-opacity=".62" stroke-width="4"/>
+    <path d="M76 183 Q126 76 305 83" stroke="#FFFFFF" stroke-opacity=".2" stroke-width="10" fill="none"/>
+  </g>
+</svg>

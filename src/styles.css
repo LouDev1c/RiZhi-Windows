@@ -885,9 +885,15 @@ h2 {
   font-weight: 760;
 }
 
+.task-time-button {
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
 .task-time-editor .inline-field.time-conflict,
 .task-time-editor .inline-field.time-invalid,
-.editable-table input.time-conflict {
+.editable-table input.time-conflict,
+.editable-table input.time-invalid {
   border-color: #dc2626;
   background: #fff1f2;
   color: #b91c1c;
@@ -904,6 +910,93 @@ h2 {
 
 .time-input::-webkit-calendar-picker-indicator {
   display: none;
+}
+
+.task-time-picker {
+  position: fixed;
+  z-index: 60;
+  width: 248px;
+  padding: 14px;
+  border: 1px solid #c7d0d9;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(31, 42, 52, 0.2);
+}
+
+.task-time-picker h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  text-align: center;
+}
+
+.task-time-picker-fields {
+  display: grid;
+  grid-template-columns: 1fr 18px 1fr;
+  align-items: end;
+  gap: 5px;
+}
+
+.task-time-picker-field {
+  display: grid;
+  grid-template-rows: auto 24px 40px 24px;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.task-time-picker-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 6px;
+  border: 1px solid #bfc9d3;
+  border-radius: 7px;
+  background: #f8fafb;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 760;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-time-picker-field input:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgba(47, 143, 103, 0.14);
+}
+
+.task-time-step-button {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #66727d;
+  line-height: 1;
+}
+
+.task-time-step-button:hover {
+  color: var(--accent-dark);
+}
+
+.task-time-picker-separator {
+  align-self: center;
+  padding-top: 22px;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 760;
+}
+
+.task-time-picker-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.task-time-picker-actions button {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
 }
 
 .task-title-input {
@@ -1143,23 +1236,50 @@ h2 {
 }
 
 .profile-stats-head .muted {
-  max-width: 520px;
+  max-width: none;
+  white-space: nowrap;
 }
 
 .profile-period-controls {
   display: flex;
   align-items: end;
-  gap: 12px;
+  gap: 8px;
   justify-content: flex-end;
   white-space: nowrap;
 }
 
+.profile-period-controls .date-picker.profile-period-picker {
+  width: 118px;
+  min-width: 118px;
+}
+
 .profile-period-picker select {
+  display: block;
   width: 118px;
 }
 
 .profile-period-controls .date-picker {
   min-width: 170px;
+}
+
+.profile-reference-picker {
+  width: 228px;
+}
+
+.profile-reference-picker > input {
+  width: 100%;
+}
+
+.profile-period-reference-pair {
+  display: grid;
+  grid-template-columns: minmax(88px, 1fr) 112px;
+  gap: 8px;
+}
+
+.profile-period-reference-pair input,
+.profile-period-reference-pair select {
+  width: 100%;
+  min-width: 0;
 }
 
 .stats-summary-grid {
@@ -3278,27 +3398,35 @@ h2 {
 }
 
 .daily-table {
-  min-width: 860px;
+  min-width: 940px;
 }
 
 .daily-table th:nth-child(1),
-.daily-table td:nth-child(1) {
-  width: 180px;
-}
-
+.daily-table td:nth-child(1),
 .daily-table th:nth-child(2),
 .daily-table td:nth-child(2) {
-  width: 180px;
+  width: 128px;
+  min-width: 128px;
 }
 
 .daily-table th:nth-child(3),
 .daily-table td:nth-child(3) {
-  width: 48%;
+  width: 180px;
 }
 
 .daily-table th:nth-child(4),
 .daily-table td:nth-child(4) {
+  width: 42%;
+}
+
+.daily-table th:nth-child(5),
+.daily-table td:nth-child(5) {
   width: 110px;
+}
+
+.daily-plan-clock-input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .add-table-row {

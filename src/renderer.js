@@ -26,8 +26,10 @@ const {
   weekdayFromDate
 } = globalThis.RizhiDateUtils;
 const {
-  completeClockInput,
+  clockDigitsToTime,
   extractTimeRangeFromInput,
+  formatClockDisplay,
+  formatClockDigits,
   formatTimeRangeInput,
   inputRangeToComparableIntervals,
   isAllDayRange,
@@ -73,6 +75,12 @@ const taskTemplateList = document.querySelector('#taskTemplateList');
 const taskTemplateEmpty = document.querySelector('#taskTemplateEmpty');
 const importMoreButton = document.querySelector('#importMoreButton');
 const taskDateFilter = document.querySelector('#taskDateFilter');
+const taskTimePicker = document.querySelector('#taskTimePicker');
+const taskTimePickerTitle = document.querySelector('#taskTimePickerTitle');
+const taskTimePickerHour = document.querySelector('#taskTimePickerHour');
+const taskTimePickerMinute = document.querySelector('#taskTimePickerMinute');
+const cancelTaskTimePickerButton = document.querySelector('#cancelTaskTimePickerButton');
+const confirmTaskTimePickerButton = document.querySelector('#confirmTaskTimePickerButton');
 const journalDate = document.querySelector('#journalDate');
 const journalTag = document.querySelector('#journalTag');
 const journalTagPaletteButton = document.querySelector('#journalTagPaletteButton');
@@ -156,6 +164,14 @@ const cancelTaskEditButton = document.querySelector('#cancelTaskEditButton');
 const taskDetails = document.querySelector('#taskDetails');
 const profileStatsStartDate = document.querySelector('#profileStatsStartDate');
 const profileStatsPeriod = document.querySelector('#profileStatsPeriod');
+const profileStatsReferencePicker = document.querySelector('#profileStatsReferencePicker');
+const profileStatsReferenceLabel = document.querySelector('#profileStatsReferenceLabel');
+const profileStatsDateControl = document.querySelector('#profileStatsDateControl');
+const profileStatsMonth = document.querySelector('#profileStatsMonth');
+const profileStatsQuarterControl = document.querySelector('#profileStatsQuarterControl');
+const profileStatsQuarterYear = document.querySelector('#profileStatsQuarterYear');
+const profileStatsQuarter = document.querySelector('#profileStatsQuarter');
+const profileStatsYear = document.querySelector('#profileStatsYear');
 const profileStatsSummary = document.querySelector('#profileStatsSummary');
 const profileStatsRangeText = document.querySelector('#profileStatsRangeText');
 const profileStatsPie = document.querySelector('#profileStatsPie');
@@ -259,6 +275,7 @@ const taskCategoryColorSaveTimers = new Map();
 let activeMediaAnnotationEditor = null;
 let highlightedTaskId = '';
 let currentEffectiveNow = new Date();
+let activeTaskTimePicker = null;
 let previousFloatingTaskStateKey = '';
 let floatingTaskStateInitialized = false;
 let statusTimer = null;
@@ -347,7 +364,7 @@ const tutorialSteps = [
     page: 'tasks',
     targetSelector: '#taskList',
     title: '完成情况与备注',
-    text: '每个任务条右侧可以选择完成情况；铅笔按钮用于填写可选备注。日常只需确认状态，只有出现偏差或值得保留的结果时再补充备注。'
+    text: '点击任务条的开始或结束时间可以打开时间选择器。右侧可选择完成情况；铅笔按钮用于填写可选备注。'
   },
   {
     page: 'records',
@@ -389,7 +406,7 @@ const tutorialSteps = [
     targetSelector: '.profile-dashboard .panel',
     scrollBlock: 'start',
     title: '周期回顾',
-    text: '这里按自然日、周、月、季度和年度查看任务状态与计划时间分配。饼状图展示类型占比，右侧条形图展示每日分布。'
+    text: '先选择每日、每周、每月、每季度或每年，右侧筛选器会切换为对应的日期形式。饼状图展示分类占比，条形图按日期或月份展示周期内分布。'
   },
   {
     page: 'settings',
@@ -499,9 +516,29 @@ if (journalUnsavedModal) {
 }
 window.addEventListener('resize', () => {
   if (!tutorialOverlay.classList.contains('hidden')) positionTutorialOverlay();
+  positionTaskTimePicker();
 });
 document.addEventListener('click', closeTagPalettesOnOutsideClick);
+document.addEventListener('pointerdown', (event) => {
+  if (!activeTaskTimePicker) return;
+  if (taskTimePicker.contains(event.target) || event.target.closest('.task-time-button')) return;
+  closeTaskTimePicker();
+});
 document.addEventListener('keydown', handleTaskHistoryShortcut);
+taskList.addEventListener('scroll', positionTaskTimePicker);
+cancelTaskTimePickerButton.addEventListener('click', closeTaskTimePicker);
+confirmTaskTimePickerButton.addEventListener('click', () => void confirmTaskTimePicker());
+[taskTimePickerHour, taskTimePickerMinute].forEach((input) => {
+  const max = input === taskTimePickerHour ? 23 : 59;
+  input.addEventListener('focus', () => input.select());
+  input.addEventListener('input', () => sanitizeTaskTimePickerUnit(input, max));
+  input.addEventListener('blur', () => normalizeTaskTimePickerUnit(input, max));
+  input.addEventListener('keydown', handleTaskTimePickerKeydown);
+  input.addEventListener('wheel', handleTaskTimePickerWheel, { passive: false });
+});
+taskTimePicker.querySelectorAll('[data-time-step]').forEach((button) => {
+  button.addEventListener('click', () => stepTaskTimePickerUnit(button.dataset.timeUnit, Number(button.dataset.timeStep)));
+});
 if (window.whbr.onHistoryUndo) window.whbr.onHistoryUndo(handleTaskHistoryUndo);
 if (window.whbr.onHistoryRedo) window.whbr.onHistoryRedo(handleTaskHistoryRedo);
 
@@ -592,11 +629,20 @@ importMoreButton.addEventListener('drop', handleDrop);
 registerDateInput(taskDateFilter, { onCommit: renderTasks });
 registerDateInput(profileStatsStartDate, {
   onCommit: (date) => {
-    committedProfileStatsStartDate = date;
-    renderProfileStats();
+    setProfileStatsReferenceDate(date);
   }
 });
-if (profileStatsPeriod) profileStatsPeriod.addEventListener('change', renderProfileStats);
+if (profileStatsPeriod) profileStatsPeriod.addEventListener('change', handleProfileStatsPeriodChange);
+if (profileStatsMonth) profileStatsMonth.addEventListener('change', commitProfileStatsMonthReference);
+if (profileStatsQuarterYear) {
+  profileStatsQuarterYear.addEventListener('change', commitProfileStatsQuarterReference);
+  profileStatsQuarterYear.addEventListener('keydown', blurOnEnter);
+}
+if (profileStatsQuarter) profileStatsQuarter.addEventListener('change', commitProfileStatsQuarterReference);
+if (profileStatsYear) {
+  profileStatsYear.addEventListener('change', commitProfileStatsYearReference);
+  profileStatsYear.addEventListener('keydown', blurOnEnter);
+}
 registerDateInput(journalDate, { onCommit: handleJournalDateCommit });
 if (journalTag) journalTag.addEventListener('change', () => {
   renderTagPicker(journalTag, journalTagPaletteButton, journalTagPalette);
@@ -2052,7 +2098,8 @@ function handleDateStepButton(event) {
   if (!input || !Number.isFinite(offsetDays)) return;
 
   const currentDate = committedDateInputValue(input) || formatLocalDate(currentEffectiveNow || new Date());
-  const nextDate = shiftDate(currentDate, offsetDays);
+  const profilePeriodDays = input === profileStatsStartDate && profileStatsPeriod?.value === 'week' ? 7 : 1;
+  const nextDate = shiftDate(currentDate, offsetDays * profilePeriodDays);
   if (!nextDate || !isSelectableDate(nextDate)) return;
 
   setDateInputValue(input, nextDate, { trigger: true });
@@ -3043,8 +3090,8 @@ function applyDailyPlanVoiceTasks() {
   }
 
   Array.from(dailyPlanTableBody.querySelectorAll('tr')).forEach((row) => {
-    const title = clean(row.querySelector('td:nth-child(2) input')?.value);
-    const details = clean(row.querySelector('td:nth-child(3) input')?.value);
+    const title = clean(row.querySelector('td:nth-child(3) input')?.value);
+    const details = clean(row.querySelector('td:nth-child(4) input')?.value);
     if (!title && !details) row.remove();
   });
 
@@ -3072,25 +3119,17 @@ function clearDailyPlanVoiceParsedState(options = {}) {
 
 function addDailyPlanRow(timeRange = '', values = {}) {
   const row = document.createElement('tr');
-  const timeCell = document.createElement('td');
-  const timeInput = document.createElement('input');
-  timeInput.type = 'text';
-  timeInput.placeholder = '09:00-11:30';
-  timeInput.value = formatDailyPlanTimeRangeInput(timeRange);
-  timeInput.setAttribute('aria-label', '时间段');
-  timeInput.inputMode = 'numeric';
-  timeInput.addEventListener('focus', () => timeInput.select());
-  timeInput.addEventListener('click', () => timeInput.select());
-  timeInput.addEventListener('beforeinput', (event) => {
-    if (event.inputType === 'insertText' && /\D/.test(event.data || '')) event.preventDefault();
-  });
-  timeInput.addEventListener('input', () => {
-    timeInput.value = formatDailyPlanTimeRangeInput(timeInput.value);
-    timeInput.setSelectionRange(timeInput.value.length, timeInput.value.length);
-  });
-  timeInput.addEventListener('keydown', handleDailyPlanTimeInputKeydown);
-  timeInput.addEventListener('keydown', handleDailyPlanGridKeydown);
-  timeCell.appendChild(timeInput);
+  const parsedRange = extractTimeRangeFromInput(timeRange);
+  const startTime = clean(values.startTime) || (parsedRange && parsedRange.startTime) || '';
+  const endTime = clean(values.endTime) || (parsedRange && parsedRange.endTime) || '';
+
+  const startTimeCell = document.createElement('td');
+  const startTimeInput = createDailyPlanClockInput(startTime, '开始时间');
+  startTimeCell.appendChild(startTimeInput);
+
+  const endTimeCell = document.createElement('td');
+  const endTimeInput = createDailyPlanClockInput(endTime, '结束时间');
+  endTimeCell.appendChild(endTimeInput);
 
   const titleCell = document.createElement('td');
   const titleInput = document.createElement('input');
@@ -3127,34 +3166,41 @@ function addDailyPlanRow(timeRange = '', values = {}) {
   deleteButton.addEventListener('keydown', handleDailyPlanGridKeydown);
   actionCell.appendChild(deleteButton);
 
-  row.append(timeCell, titleCell, planCell, typeCell, actionCell);
+  row.append(startTimeCell, endTimeCell, titleCell, planCell, typeCell, actionCell);
   dailyPlanTableBody.appendChild(row);
 }
 
-function formatDailyPlanTimeRangeInput(value) {
-  const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
-  const accepted = [];
-
-  for (const digit of digits) {
-    const position = accepted.length;
-    const numeric = Number(digit);
-    const isHourTens = position === 0 || position === 4;
-    const isHourOnes = position === 1 || position === 5;
-    const isMinuteTens = position === 2 || position === 6;
-
-    if (isHourTens && numeric > 2) continue;
-    if (isHourOnes && Number(`${accepted[position - 1]}${digit}`) > 23) continue;
-    if (isMinuteTens && numeric > 5) continue;
-    accepted.push(digit);
-  }
-
-  return formatTimeRangeInput(accepted.join(''));
+function createDailyPlanClockInput(value, label) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'daily-plan-clock-input';
+  input.placeholder = label === '开始时间' ? '09:00' : '11:30';
+  input.value = formatClockDisplay(value);
+  input.inputMode = 'numeric';
+  input.maxLength = 5;
+  input.autocomplete = 'off';
+  input.setAttribute('aria-label', `${label}，请输入四位数字`);
+  input.addEventListener('focus', () => input.select());
+  input.addEventListener('click', () => input.select());
+  input.addEventListener('beforeinput', (event) => {
+    if (event.inputType === 'insertText' && /\D/.test(event.data || '')) event.preventDefault();
+  });
+  input.addEventListener('input', () => {
+    input.value = formatClockDisplay(input.value);
+    const digits = formatClockDigits(input.value);
+    input.classList.toggle('time-invalid', digits.length === 4 && !clockDigitsToTime(input.value));
+  });
+  input.addEventListener('blur', () => validateDailyPlanClockInput(input));
+  input.addEventListener('keydown', handleDailyPlanGridKeydown);
+  return input;
 }
 
-function handleDailyPlanTimeInputKeydown(event) {
-  if (event.key !== 'Backspace') return;
-  event.preventDefault();
-  event.currentTarget.value = '';
+function validateDailyPlanClockInput(input) {
+  const valid = Boolean(clockDigitsToTime(input.value));
+  input.classList.toggle('time-invalid', !valid && Boolean(input.value));
+  input.setAttribute('aria-invalid', String(!valid && Boolean(input.value)));
+  input.title = valid || !input.value ? '' : '请输入四位 24 小时制时间，例如 0930。';
+  return valid;
 }
 
 function handleDailyPlanGridKeydown(event) {
@@ -3281,26 +3327,44 @@ async function saveDailyPlanTable() {
     return;
   }
 
+  let hasInvalidRow = false;
   const planRows = Array.from(dailyPlanTableBody.querySelectorAll('tr'))
     .map((row, index) => {
-      const timeInput = row.querySelector('td:nth-child(1) input');
-      const titleInput = row.querySelector('td:nth-child(2) input');
-      const planInput = row.querySelector('td:nth-child(3) input');
+      const startTimeInput = row.querySelector('td:nth-child(1) input');
+      const endTimeInput = row.querySelector('td:nth-child(2) input');
+      const titleInput = row.querySelector('td:nth-child(3) input');
+      const planInput = row.querySelector('td:nth-child(4) input');
       const typeSelect = row.querySelector('select');
-      const timeRange = extractTimeRangeFromInput(timeInput.value);
       const title = clean(titleInput.value);
       const planDetails = clean(planInput.value);
-      if (!timeRange || !title) return null;
+      if (!title && !planDetails) return null;
+
+      const startTime = clockDigitsToTime(startTimeInput.value);
+      const endTime = clockDigitsToTime(endTimeInput.value);
+      const validStart = validateDailyPlanClockInput(startTimeInput);
+      const validEnd = validateDailyPlanClockInput(endTimeInput);
+      titleInput.classList.toggle('time-invalid', !title);
+      titleInput.setAttribute('aria-invalid', String(!title));
+      if (!validStart || !validEnd || !title) {
+        hasInvalidRow = true;
+        return null;
+      }
 
       return {
         title,
         planDetails,
-        timeRange,
+        startTime,
+        endTime,
         typeId: typeSelect.value,
         index
       };
     })
     .filter(Boolean);
+
+  if (hasInvalidRow) {
+    setStatus('请补全标红的任务名和四位时间，时间需符合 24 小时制。', 'error', 5000);
+    return;
+  }
 
   if (planRows.length === 0) {
     setStatus('请至少填写一条有效的时间段和任务。', '');
@@ -3314,8 +3378,8 @@ async function saveDailyPlanTable() {
       newTasks.push({
         id: `daily-${Date.now()}-${date}-${planRow.index}`,
         title: planRow.title,
-        startTime: planRow.timeRange.startTime,
-        endTime: planRow.timeRange.endTime,
+        startTime: planRow.startTime,
+        endTime: planRow.endTime,
         date,
         weekday: weekdayFromDate(date),
         location: '',
@@ -3402,23 +3466,12 @@ function renderTasks(options = {}) {
     const time = document.createElement('div');
     time.className = 'task-time task-time-editor';
     time.classList.toggle('task-time-conflict-text', hasTimeConflict);
-    const startInput = createTaskTimeInput(task.startTime, '开始时间');
+    const startInput = createTaskTimeButton(task, 'startTime', '开始时间');
     startInput.classList.toggle('time-conflict', hasTimeConflict);
     const separator = document.createElement('span');
     separator.textContent = '-';
-    const endInput = createTaskTimeInput(task.endTime, '结束时间');
+    const endInput = createTaskTimeButton(task, 'endTime', '结束时间');
     endInput.classList.toggle('time-conflict', hasTimeConflict);
-    [startInput, endInput].forEach((input) => {
-      input.addEventListener('focus', () => {
-        input.dataset.autoAdvanced = '';
-        input.select();
-      });
-      input.addEventListener('click', () => input.select());
-    });
-    startInput.addEventListener('input', () => handleTaskTimeInput(startInput, endInput));
-    endInput.addEventListener('input', () => handleTaskTimeInput(endInput));
-    startInput.addEventListener('blur', () => commitTaskTimeField(task.id, 'startTime', startInput));
-    endInput.addEventListener('blur', () => commitTaskTimeField(task.id, 'endTime', endInput));
     time.append(startInput, separator, endInput);
 
     const body = document.createElement('div');
@@ -3510,9 +3563,11 @@ function renderProfileStats() {
   if (!committedProfileStatsStartDate) {
     committedProfileStatsStartDate = formatLocalDate(currentEffectiveNow || new Date());
   }
-  if (!profileStatsStartDate.value || document.activeElement !== profileStatsStartDate) {
-    setDateInputValue(profileStatsStartDate, committedProfileStatsStartDate);
-  }
+  committedProfileStatsStartDate = normalizeProfileStatsReferenceDate(
+    profileStatsPeriod.value || 'week',
+    committedProfileStatsStartDate
+  );
+  syncProfileStatsReferenceControls();
 
   const range = dateRangeForProfileStats(
     profileStatsPeriod.value || 'week',
@@ -3558,6 +3613,112 @@ function renderProfileStats() {
   });
 
   renderProfilePlanAllocation(rangeDates, rangeTasks, minutesByType, totalMinutes);
+}
+
+function blurOnEnter(event) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.currentTarget.blur();
+}
+
+function normalizeProfileStatsReferenceDate(period, date) {
+  const fallback = formatLocalDate(currentEffectiveNow || new Date());
+  const baseDate = isSelectableDate(normalizeDate(date)) ? normalizeDate(date) : fallback;
+  return dateRangeForProfileStats(period, baseDate).start;
+}
+
+function setProfileStatsReferenceDate(date, options = {}) {
+  committedProfileStatsStartDate = normalizeProfileStatsReferenceDate(
+    profileStatsPeriod?.value || 'week',
+    date
+  );
+  syncProfileStatsReferenceControls();
+  if (options.render !== false) renderProfileStats();
+}
+
+function handleProfileStatsPeriodChange() {
+  setProfileStatsReferenceDate(committedProfileStatsStartDate || formatLocalDate(currentEffectiveNow || new Date()));
+}
+
+function commitProfileStatsMonthReference() {
+  const match = String(profileStatsMonth?.value || '').match(/^(\d{4})-(\d{2})$/);
+  if (!match || Number(match[1]) < Number(MIN_DATE_VALUE.slice(0, 4))) {
+    syncProfileStatsReferenceControls();
+    return;
+  }
+  setProfileStatsReferenceDate(`${match[1]}-${match[2]}-01`);
+}
+
+function validProfileStatsYear(value) {
+  const year = Number(value);
+  return Number.isInteger(year) && year >= Number(MIN_DATE_VALUE.slice(0, 4)) && year <= 9999 ? year : null;
+}
+
+function commitProfileStatsQuarterReference() {
+  const year = validProfileStatsYear(profileStatsQuarterYear?.value);
+  const quarter = Number(profileStatsQuarter?.value);
+  if (!year || quarter < 1 || quarter > 4) {
+    syncProfileStatsReferenceControls();
+    return;
+  }
+  setProfileStatsReferenceDate(`${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}-01`);
+}
+
+function commitProfileStatsYearReference() {
+  const year = validProfileStatsYear(profileStatsYear?.value);
+  if (!year) {
+    syncProfileStatsReferenceControls();
+    return;
+  }
+  setProfileStatsReferenceDate(`${year}-01-01`);
+}
+
+function syncProfileStatsReferenceControls() {
+  if (!profileStatsPeriod || !profileStatsStartDate) return;
+  const period = profileStatsPeriod.value || 'week';
+  const referenceDate = normalizeProfileStatsReferenceDate(period, committedProfileStatsStartDate);
+  const year = Number(referenceDate.slice(0, 4));
+  const month = Number(referenceDate.slice(5, 7));
+  const isDatePeriod = period === 'day' || period === 'week';
+
+  profileStatsReferenceLabel.textContent = {
+    day: '日期',
+    week: '周一',
+    month: '月份',
+    quarter: '季度',
+    year: '年份'
+  }[period];
+  profileStatsDateControl.classList.toggle('hidden', !isDatePeriod);
+  profileStatsMonth.classList.toggle('hidden', period !== 'month');
+  profileStatsQuarterControl.classList.toggle('hidden', period !== 'quarter');
+  profileStatsYear.classList.toggle('hidden', period !== 'year');
+
+  profileStatsStartDate.min = period === 'week' ? '1949-01-03' : MIN_DATE_VALUE;
+  profileStatsStartDate.step = period === 'week' ? '7' : '1';
+  setDateInputValue(profileStatsStartDate, referenceDate);
+  profileStatsMonth.value = referenceDate.slice(0, 7);
+  profileStatsQuarterYear.value = String(year);
+  profileStatsQuarter.value = String(Math.floor((month - 1) / 3) + 1);
+  profileStatsYear.value = String(year);
+
+  const previousButton = profileStatsDateControl.querySelector('[data-date-step="-1"]');
+  const nextButton = profileStatsDateControl.querySelector('[data-date-step="1"]');
+  if (previousButton) previousButton.setAttribute('aria-label', period === 'week' ? '前一周' : '前一天');
+  if (nextButton) nextButton.setAttribute('aria-label', period === 'week' ? '后一周' : '后一天');
+
+  const currentPeriodButton = profileStatsReferencePicker?.querySelector('.date-today-button');
+  if (currentPeriodButton) {
+    const buttonText = {
+      day: '今天',
+      week: '本周',
+      month: '本月',
+      quarter: '本季度',
+      year: '本年'
+    }[period];
+    currentPeriodButton.textContent = buttonText;
+    currentPeriodButton.title = `返回${buttonText}`;
+    currentPeriodButton.setAttribute('aria-label', `返回${buttonText}`);
+  }
 }
 
 function renderProfilePlanAllocation(rangeDates, rangeTasks, minutesByType, totalMinutes) {
@@ -3703,6 +3864,7 @@ function renderAll() {
 }
 
 function showPage(page) {
+  closeTaskTimePicker();
   navItems.forEach((navItem) => {
     navItem.classList.toggle('active', navItem.dataset.page === page);
   });
@@ -4101,84 +4263,115 @@ function createInlineInput(type, value, label) {
   return input;
 }
 
-function createTaskTimeInput(value, label) {
-  const input = createInlineInput('text', formatTaskTimeInput(value), label);
-  input.classList.add('time-input');
-  input.inputMode = 'numeric';
-  input.maxLength = 5;
-  input.placeholder = '--:--';
-  input.addEventListener('beforeinput', (event) => {
-    if (event.inputType === 'insertText' && /\D/.test(event.data || '')) event.preventDefault();
+function createTaskTimeButton(task, field, label) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'inline-field time-input task-time-button';
+  button.textContent = displayTaskTime(task[field]);
+  button.setAttribute('aria-label', `${label}，当前 ${button.textContent}`);
+  button.title = `点击选择${label}`;
+  button.addEventListener('click', () => openTaskTimePicker(button, task.id, field, task[field], label));
+  return button;
+}
+
+function displayTaskTime(value) {
+  return timeToMinutes(value) === null ? '--:--' : normalizeTime(value);
+}
+
+function openTaskTimePicker(anchor, taskId, field, value, label) {
+  const normalized = displayTaskTime(value) === '--:--' ? '00:00' : displayTaskTime(value);
+  activeTaskTimePicker = { anchor, taskId, field };
+  taskTimePickerTitle.textContent = label;
+  taskTimePickerHour.value = normalized.slice(0, 2);
+  taskTimePickerMinute.value = normalized.slice(3, 5);
+  taskTimePicker.classList.remove('hidden');
+  positionTaskTimePicker();
+  window.requestAnimationFrame(() => {
+    taskTimePickerHour.focus();
+    taskTimePickerHour.select();
   });
-  return input;
 }
 
-function handleTaskTimeInput(input, nextInput = null) {
-  const previousLength = input.value.length;
-  input.value = formatTaskTimeInput(input.value);
-  if (input.value.length !== previousLength) {
-    input.setSelectionRange(input.value.length, input.value.length);
-  }
+function positionTaskTimePicker() {
+  if (!activeTaskTimePicker || taskTimePicker.classList.contains('hidden')) return;
+  const anchorRect = activeTaskTimePicker.anchor.getBoundingClientRect();
+  const pickerRect = taskTimePicker.getBoundingClientRect();
+  const margin = 10;
+  const maxLeft = Math.max(margin, window.innerWidth - pickerRect.width - margin);
+  const left = Math.min(maxLeft, Math.max(margin, anchorRect.left + anchorRect.width / 2 - pickerRect.width / 2));
+  const below = anchorRect.bottom + 8;
+  const top = below + pickerRect.height <= window.innerHeight - margin
+    ? below
+    : Math.max(margin, anchorRect.top - pickerRect.height - 8);
+  taskTimePicker.style.left = `${Math.round(left)}px`;
+  taskTimePicker.style.top = `${Math.round(top)}px`;
+}
 
-  const digits = input.value.replace(/\D/g, '');
-  if (digits.length < 4) {
-    input.dataset.autoAdvanced = '';
+function taskTimePickerInput(unit) {
+  return unit === 'hour' ? taskTimePickerHour : taskTimePickerMinute;
+}
+
+function taskTimePickerUnitMax(unit) {
+  return unit === 'hour' ? 23 : 59;
+}
+
+function sanitizeTaskTimePickerUnit(input, max) {
+  const digits = input.value.replace(/\D/g, '').slice(0, 2);
+  if (!digits) {
+    input.value = '';
     return;
   }
-
-  if (!nextInput || input.dataset.autoAdvanced === 'true' || !normalizeTaskTimeInput(input.value)) return;
-  input.dataset.autoAdvanced = 'true';
-  window.setTimeout(() => {
-    if (document.activeElement !== input) return;
-    nextInput.focus();
-    nextInput.select();
-  }, 0);
+  input.value = String(Math.min(max, Number(digits)));
 }
 
-function formatTaskTimeInput(value) {
-  const digits = clean(value).replace(/\D/g, '').slice(0, 4);
-  const accepted = [];
+function stepTaskTimePickerUnit(unit, amount) {
+  const input = taskTimePickerInput(unit);
+  const max = taskTimePickerUnitMax(unit);
+  const current = Number(input.value || 0);
+  const next = (current + amount + max + 1) % (max + 1);
+  input.value = String(next).padStart(2, '0');
+  input.focus();
+  input.select();
+}
 
-  for (const digit of digits) {
-    const position = accepted.length;
-    const numeric = Number(digit);
-    if (position === 0 && numeric > 2) continue;
-    if (position === 1 && Number(`${accepted[0]}${digit}`) > 23) continue;
-    if (position === 2 && numeric > 5) continue;
-    accepted.push(digit);
+function normalizeTaskTimePickerUnit(input, max) {
+  sanitizeTaskTimePickerUnit(input, max);
+  input.value = String(Math.min(max, Number(input.value || 0))).padStart(2, '0');
+}
+
+async function confirmTaskTimePicker() {
+  if (!activeTaskTimePicker) return;
+  normalizeTaskTimePickerUnit(taskTimePickerHour, 23);
+  normalizeTaskTimePickerUnit(taskTimePickerMinute, 59);
+  const value = `${taskTimePickerHour.value}:${taskTimePickerMinute.value}`;
+  const { taskId, field } = activeTaskTimePicker;
+  closeTaskTimePicker();
+  await updateTaskField(taskId, field, value, { render: false, splitCrossDay: true });
+}
+
+function closeTaskTimePicker() {
+  taskTimePicker.classList.add('hidden');
+  activeTaskTimePicker = null;
+}
+
+function handleTaskTimePickerKeydown(event) {
+  const unit = event.currentTarget === taskTimePickerHour ? 'hour' : 'minute';
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    event.preventDefault();
+    stepTaskTimePickerUnit(unit, event.key === 'ArrowUp' ? 1 : -1);
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    void confirmTaskTimePicker();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    closeTaskTimePicker();
   }
-
-  if (accepted.length === 0) return '';
-  if (accepted.length <= 2) return accepted.length === 2 ? `${accepted.join('')}:` : accepted.join('');
-  return `${accepted.slice(0, 2).join('')}:${accepted.slice(2).join('')}`;
 }
 
-function normalizeTaskTimeInput(value) {
-  const text = clean(value);
-  const match = text.match(/^(\d{2}):(\d{2})$/);
-  if (!match) return '';
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours > 23 || minutes > 59) return '';
-  return `${match[1]}:${match[2]}`;
-}
-
-function commitTaskTimeField(taskId, field, input) {
-  const normalized = completeClockInput(input.value);
-  if (!normalized) {
-    input.value = formatTaskTimeInput(input.value);
-    input.classList.add('time-invalid');
-    input.setAttribute('aria-invalid', 'true');
-    input.title = '请输入 0000 至 2359 之间的有效时间。';
-    return;
-  }
-
-  input.value = normalized;
-  input.classList.remove('time-invalid');
-  input.removeAttribute('aria-invalid');
-  input.title = '';
-  updateTaskField(taskId, field, normalized, { render: false, splitCrossDay: true });
+function handleTaskTimePickerWheel(event) {
+  event.preventDefault();
+  const unit = event.currentTarget === taskTimePickerHour ? 'hour' : 'minute';
+  stepTaskTimePickerUnit(unit, event.deltaY < 0 ? 1 : -1);
 }
 
 function createTypeSelect(value) {
@@ -4321,8 +4514,8 @@ function syncTaskCardTimeInputs(card, task) {
   const inputs = Array.from(card.querySelectorAll('.time-input'));
   const values = [task.startTime, task.endTime];
   inputs.forEach((input, index) => {
-    if (document.activeElement === input) return;
-    input.value = formatTaskTimeInput(values[index] || '');
+    input.textContent = displayTaskTime(values[index] || '');
+    input.setAttribute('aria-label', `${index === 0 ? '开始时间' : '结束时间'}，当前 ${input.textContent}`);
   });
 }
 
@@ -7056,7 +7249,7 @@ async function startApp() {
   setDateInputValue(deleteEndDate, today);
   updateDeletePeriodFields();
   committedProfileStatsStartDate = today;
-  setDateInputValue(profileStatsStartDate, today);
+  syncProfileStatsReferenceControls();
 
   await initializeAppData();
   await refreshSystemTime();

@@ -18,7 +18,8 @@ const ffmpegStaticPath = require('ffmpeg-static');
 
 const scheduleFileExtensions = ['xlsx', 'xls', 'csv', 'tsv'];
 const allowedExtensions = new Set(scheduleFileExtensions.map((extension) => `.${extension}`));
-const appIconPath = resolveAppIconPath();
+const appIconPath = resolveAppAssetPath('rizhi_icon.ico');
+const appUiIconPath = resolveAppAssetPath('rizhi_icon.svg');
 let mainWindow = null;
 let floatingTaskWindow = null;
 let floatingTaskPayload = null;
@@ -283,10 +284,10 @@ function createTrayIcon() {
   return image.isEmpty() ? nativeImage.createEmpty() : image.resize({ width: 16, height: 16 });
 }
 
-function resolveAppIconPath() {
+function resolveAppAssetPath(fileName) {
   const candidates = [
-    path.join(__dirname, 'rizhi.ico'),
-    path.join(process.resourcesPath || '', 'rizhi.ico')
+    path.join(__dirname, fileName),
+    path.join(process.resourcesPath || '', fileName)
   ];
 
   return candidates.find((candidate) => candidate && fsSync.existsSync(candidate)) || candidates[0];
@@ -733,12 +734,13 @@ ipcMain.on('floating-task:expand', (event) => {
   expandFloatingTaskWindow();
 });
 
-ipcMain.on('floating-task:resize', (event, requestedHeight) => {
+ipcMain.on('floating-task:resize', (event, requestedSize = {}) => {
   if (!isFloatingTaskWindowSender(event) || !floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
-  const height = Math.max(124, Math.min(420, Math.round(Number(requestedHeight) || 124)));
+  const width = Math.max(252, Math.min(252, Math.round(Number(requestedSize.width) || 252)));
+  const height = Math.max(124, Math.min(420, Math.round(Number(requestedSize.height) || 124)));
   const bounds = floatingTaskWindow.getBounds();
-  if (bounds.height === height) return;
-  floatingTaskWindow.setSize(bounds.width, height);
+  if (bounds.width === width && bounds.height === height) return;
+  floatingTaskWindow.setContentSize(width, height);
   if (floatingTaskDockEdge && !floatingTaskFlashTimer) {
     setFloatingTaskDockedPosition();
     return;
@@ -798,7 +800,7 @@ ipcMain.handle('system:getTime', () => {
 });
 
 ipcMain.handle('app:getIconUrl', () => {
-  return pathToFileURL(appIconPath).toString();
+  return pathToFileURL(appUiIconPath).toString();
 });
 
 ipcMain.handle('app:getVersion', () => {

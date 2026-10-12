@@ -39,6 +39,23 @@
     return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
   }
 
+  function formatClockDigits(value) {
+    return String(value || '').replace(/\D/g, '').slice(0, 4);
+  }
+
+  function formatClockDisplay(value) {
+    const digits = formatClockDigits(value);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  }
+
+  function clockDigitsToTime(value) {
+    const digits = formatClockDigits(value);
+    if (digits.length !== 4) return '';
+    if (!isValidClockPart(Number(digits.slice(0, 2)), Number(digits.slice(2, 4)))) return '';
+    return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+  }
+
   function extractTimeRangeFromInput(value) {
     const match = formatTimeRangeInput(value).match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
     if (!match) return null;
@@ -93,8 +110,11 @@
   }
 
   return {
+    clockDigitsToTime,
     completeClockInput,
     extractTimeRangeFromInput,
+    formatClockDisplay,
+    formatClockDigits,
     formatTimeRangeInput,
     inputRangeToComparableIntervals,
     isValidClockPart,

@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>日织</title>
-    <link rel="icon" href="../rizhi.ico" />
+    <link rel="icon" href="../rizhi_icon.svg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <img class="brand-mark" src="../rizhi.ico" alt="日织" />
+          <img class="brand-mark" src="../rizhi_icon.svg" alt="日织" />
           <div>
             <strong>日织</strong>
             <span>日程与记录</span>
@@ -97,28 +97,39 @@
               <div class="section-head profile-stats-head">
                 <div>
                   <h2>周期回顾</h2>
-                  <p class="muted">查看任务完成情况和不同任务分类的计划时间分配。</p>
+                  <p class="muted">查看任务完成情况与各分类的计划时间分配。</p>
                 </div>
                 <div class="profile-period-controls">
-                  <label class="date-picker">
-                    <span>参考日期</span>
-                    <div class="date-stepper">
-                      <input id="profileStatsStartDate" type="date" />
-                      <div class="date-stepper-buttons" aria-hidden="false">
-                        <button class="date-step-button date-step-up" type="button" data-date-step-for="profileStatsStartDate" data-date-step="-1" aria-label="前一天"></button>
-                        <button class="date-step-button date-step-down" type="button" data-date-step-for="profileStatsStartDate" data-date-step="1" aria-label="后一天"></button>
-                      </div>
-                    </div>
-                  </label>
                   <label class="date-picker profile-period-picker">
                     <span>周期</span>
                     <select id="profileStatsPeriod">
-                      <option value="day">本日</option>
-                      <option value="week" selected>本周</option>
-                      <option value="month">本月</option>
-                      <option value="quarter">本季度</option>
-                      <option value="year">本年</option>
+                      <option value="day">每日</option>
+                      <option value="week" selected>每周</option>
+                      <option value="month">每月</option>
+                      <option value="quarter">每季度</option>
+                      <option value="year">每年</option>
                     </select>
+                  </label>
+                  <label id="profileStatsReferencePicker" class="date-picker profile-reference-picker">
+                    <span id="profileStatsReferenceLabel">周一</span>
+                    <div id="profileStatsDateControl" class="date-stepper">
+                      <input id="profileStatsStartDate" type="date" />
+                      <div class="date-stepper-buttons" aria-hidden="false">
+                        <button class="date-step-button date-step-up" type="button" data-date-step-for="profileStatsStartDate" data-date-step="-1" aria-label="前一周"></button>
+                        <button class="date-step-button date-step-down" type="button" data-date-step-for="profileStatsStartDate" data-date-step="1" aria-label="后一周"></button>
+                      </div>
+                    </div>
+                    <input id="profileStatsMonth" class="hidden" type="month" min="1949-01" max="9999-12" aria-label="统计月份" />
+                    <div id="profileStatsQuarterControl" class="profile-period-reference-pair hidden">
+                      <input id="profileStatsQuarterYear" type="number" min="1949" max="9999" step="1" inputmode="numeric" aria-label="统计年份" />
+                      <select id="profileStatsQuarter" aria-label="统计季度">
+                        <option value="1">第1季度</option>
+                        <option value="2">第2季度</option>
+                        <option value="3">第3季度</option>
+                        <option value="4">第4季度</option>
+                      </select>
+                    </div>
+                    <input id="profileStatsYear" class="hidden" type="number" min="1949" max="9999" step="1" inputmode="numeric" aria-label="统计年份" />
                   </label>
                 </div>
               </div>
@@ -656,7 +667,8 @@
           <table class="editable-table daily-table">
             <thead>
               <tr>
-                <th>时间段</th>
+                <th>开始时间</th>
+                <th>结束时间</th>
                 <th>任务</th>
                 <th>具体内容</th>
                 <th>分类</th>
@@ -787,6 +799,29 @@
         </div>
       </div>
     </div>
+
+    <section id="taskTimePicker" class="task-time-picker hidden" role="dialog" aria-modal="false" aria-labelledby="taskTimePickerTitle">
+      <h2 id="taskTimePickerTitle">选择时间</h2>
+      <div class="task-time-picker-fields">
+        <label class="task-time-picker-field">
+          <span>小时</span>
+          <button type="button" class="task-time-step-button" data-time-unit="hour" data-time-step="1" aria-label="小时增加">&#9650;</button>
+          <input id="taskTimePickerHour" type="text" inputmode="numeric" maxlength="2" autocomplete="off" aria-label="小时" />
+          <button type="button" class="task-time-step-button" data-time-unit="hour" data-time-step="-1" aria-label="小时减少">&#9660;</button>
+        </label>
+        <span class="task-time-picker-separator">:</span>
+        <label class="task-time-picker-field">
+          <span>分钟</span>
+          <button type="button" class="task-time-step-button" data-time-unit="minute" data-time-step="1" aria-label="分钟增加">&#9650;</button>
+          <input id="taskTimePickerMinute" type="text" inputmode="numeric" maxlength="2" autocomplete="off" aria-label="分钟" />
+          <button type="button" class="task-time-step-button" data-time-unit="minute" data-time-step="-1" aria-label="分钟减少">&#9660;</button>
+        </label>
+      </div>
+      <div class="task-time-picker-actions">
+        <button id="cancelTaskTimePickerButton" class="secondary-button" type="button">取消</button>
+        <button id="confirmTaskTimePickerButton" class="primary-button" type="button">确定</button>
+      </div>
+    </section>
 
     <div id="tutorialConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="tutorialConfirmTitle">
       <div class="modal-card small-modal">

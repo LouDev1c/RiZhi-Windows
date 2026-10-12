@@ -7,7 +7,7 @@ const taskTime = document.querySelector('#taskTime');
 const countdownLabel = document.querySelector('#countdownLabel');
 const countdown = document.querySelector('#countdown');
 const taskDetails = document.querySelector('#taskDetails');
-let lastRequestedHeight = 0;
+let lastRequestedSize = '';
 
 function render(payload = {}) {
   const active = Boolean(payload.active);
@@ -63,10 +63,15 @@ function rgbToHex(rgb) {
 
 function requestWindowResize() {
   window.requestAnimationFrame(() => {
-    const height = Math.ceil(bubble.scrollHeight);
-    if (height === lastRequestedHeight) return;
-    lastRequestedHeight = height;
-    window.floatingTask.resize(height);
+    const bounds = bubble.getBoundingClientRect();
+    const size = {
+      width: Math.ceil(bounds.width),
+      height: Math.ceil(bounds.height)
+    };
+    const signature = `${size.width}x${size.height}`;
+    if (signature === lastRequestedSize) return;
+    lastRequestedSize = signature;
+    window.floatingTask.resize(size);
   });
 }
 

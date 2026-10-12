@@ -13,6 +13,6 @@ contextBridge.exposeInMainWorld('floatingTask', {
   },
   openMainWindow: () => ipcRenderer.send('floating-task:open-main'),
   expand: () => ipcRenderer.send('floating-task:expand'),
-  resize: (height) => ipcRenderer.send('floating-task:resize', height),
+  resize: (size) => ipcRenderer.send('floating-task:resize', size),
   toggleTopmost: () => ipcRenderer.send('floating-task:toggle-topmost')
 });

@@ -1,6 +1,6 @@
 {
   "name": "rizhi",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "日织 - 本地日程与生活记录桌面客户端",
   "main": "main.js",
   "author": "",
@@ -36,14 +36,19 @@
       "main.js",
       "preload.js",
       "floatingTaskPreload.js",
-      "rizhi.ico",
+      "rizhi_icon.ico",
+      "rizhi_icon.svg",
       "src/**/*",
       "package.json"
     ],
     "extraResources": [
       {
-        "from": "rizhi.ico",
-        "to": "rizhi.ico"
+        "from": "rizhi_icon.ico",
+        "to": "rizhi_icon.ico"
+      },
+      {
+        "from": "rizhi_icon.svg",
+        "to": "rizhi_icon.svg"
       }
     ],
     "win": {
@@ -55,7 +60,7 @@
           ]
         }
       ],
-      "icon": "rizhi.ico"
+      "icon": "rizhi_icon.ico"
     },
     "nsis": {
       "oneClick": false,
