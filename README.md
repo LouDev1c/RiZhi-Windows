@@ -1,12 +1,47 @@
-# 日织
+<div align="center">
+  <img src="./rizhi_icon.svg" width="144" height="144" alt="日织应用图标" />
 
-日织是一款面向 Windows 的本地日程与生活记录软件。它用于安排每天的任务、快速确认完成情况、记录每日生活，并通过周期统计观察计划时间的分配。
+  <h1>日织</h1>
+
+  <p><strong>本地优先的 Windows 日程与生活记录软件</strong></p>
+  <p>把每日安排、生活记录与周期回顾，安静地编织在一起。</p>
+
+  <p>
+    <a href="https://github.com/LouDev1c/rizhi-pc/releases"><img src="https://img.shields.io/github/v/release/LouDev1c/rizhi-pc?style=flat-square&label=Release" alt="最新版本" /></a>
+    <img src="https://img.shields.io/badge/平台-Windows%2010%20%7C%2011-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Windows 10 和 Windows 11" />
+    <img src="https://img.shields.io/badge/数据-本地优先-2F8F67?style=flat-square" alt="本地优先" />
+    <img src="https://img.shields.io/badge/许可证-MIT-59636E?style=flat-square" alt="MIT 许可证" />
+  </p>
+
+  <p>
+    <a href="#安装与更新">安装</a> ·
+    <a href="#核心能力">功能</a> ·
+    <a href="#本地存储">数据存储</a> ·
+    <a href="#开发">开发</a>
+  </p>
+</div>
+
+---
+
+## 关于日织
+
+日织用于安排每天的任务、快速确认完成情况、记录每日生活，并通过自然日、周、月、季度和年度统计观察计划时间的分配。
 
 任务、记录、标签、模板和附件默认保存在本机。除检查 GitHub Releases 更新、首次下载离线语音模型以及同一局域网内的手机附件上传外，日常使用不需要把个人记录发送到外部服务。
 
+## 核心能力
+
+| 模块 | 能力 |
+| --- | --- |
+| 每日安排 | 创建单日或多日任务、导入课表、复用安排模板，并通过冲突提示维护清晰的时间线。 |
+| 生活记录 | 记录每天发生的事，以多个自定义标签组织日子，并归档照片、动态图片和视频。 |
+| 周期回顾 | 按日、周、月、季度或年度查看任务完成情况，以及各类任务的计划时间分配。 |
+| 本地语音 | 使用离线模型完成任务与记录的语音转写，识别过程不依赖在线服务。 |
+| 本地数据 | 任务、记录、设置和附件由用户掌控，可统一迁移存放位置，也可按日期删除。 |
+
 ## 安装与更新
 
-1. 在 GitHub 仓库右侧进入 **Releases**。
+1. 前往 [GitHub Releases](https://github.com/LouDev1c/rizhi-pc/releases)。
 2. 打开标记为 **Latest** 的版本，下载安装程序并按提示完成安装。
 3. 发布新版本后，旧版本启动时会询问是否更新。选择更新会下载并安装新版本，不会清理已有的本地数据。
 
