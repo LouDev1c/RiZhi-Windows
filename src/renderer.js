@@ -270,6 +270,7 @@ let draggedTaskId = '';
 let deleteMode = 'all';
 let selectedTaskTemplateId = '';
 let expandedTaskTemplateId = '';
+let editingTaskTemplateId = '';
 let pendingTaskCategoryDeleteId = '';
 const taskCategoryColorSaveTimers = new Map();
 let activeMediaAnnotationEditor = null;
@@ -4048,6 +4049,7 @@ async function saveCurrentDayAsTemplate(event) {
 function openReuseTemplateModal() {
   selectedTaskTemplateId = '';
   expandedTaskTemplateId = '';
+  editingTaskTemplateId = '';
   renderTaskTemplateList();
   closeImportChoiceModal();
   reuseTemplateModal.classList.remove('hidden');
@@ -4057,6 +4059,7 @@ function closeReuseTemplateModal() {
   reuseTemplateModal.classList.add('hidden');
   selectedTaskTemplateId = '';
   expandedTaskTemplateId = '';
+  editingTaskTemplateId = '';
 }
 
 function renderTaskTemplateList() {
@@ -4092,6 +4095,22 @@ function renderTaskTemplateList() {
     row.append(selection, name, count, toggle);
     row.addEventListener('click', () => selectTaskTemplate(template.id));
 
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'task-template-edit-button';
+    editButton.classList.toggle('is-editing', template.id === editingTaskTemplateId);
+    editButton.textContent = template.id === editingTaskTemplateId ? '查看' : '修改';
+    editButton.title = template.id === editingTaskTemplateId ? '切换为预览' : `修改模板“${template.name}”`;
+    editButton.setAttribute('aria-label', editButton.title);
+    editButton.setAttribute('aria-pressed', String(template.id === editingTaskTemplateId));
+    editButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      selectedTaskTemplateId = template.id;
+      expandedTaskTemplateId = template.id;
+      editingTaskTemplateId = editingTaskTemplateId === template.id ? '' : template.id;
+      renderTaskTemplateList();
+    });
+
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'task-template-delete-button';
@@ -4106,13 +4125,21 @@ function renderTaskTemplateList() {
 
     const rowLayout = document.createElement('div');
     rowLayout.className = 'task-template-row-layout';
-    rowLayout.append(row, deleteButton);
+    rowLayout.append(row, editButton, deleteButton);
     item.appendChild(rowLayout);
 
     if (template.id === expandedTaskTemplateId) {
       const details = document.createElement('div');
       details.className = 'task-template-details';
-      template.items.forEach((task) => details.appendChild(createTaskTemplatePreview(task)));
+      if (template.id === editingTaskTemplateId) {
+        details.classList.add('is-editing');
+        details.appendChild(createTaskTemplateEditorHeading());
+        template.items.forEach((task, index) => {
+          details.appendChild(createTaskTemplateEditor(template.id, task, index));
+        });
+      } else {
+        template.items.forEach((task) => details.appendChild(createTaskTemplatePreview(task)));
+      }
       item.appendChild(details);
     }
     taskTemplateList.appendChild(item);
@@ -4132,6 +4159,7 @@ async function deleteTaskTemplate(templateId) {
   };
   if (selectedTaskTemplateId === templateId) selectedTaskTemplateId = '';
   if (expandedTaskTemplateId === templateId) expandedTaskTemplateId = '';
+  if (editingTaskTemplateId === templateId) editingTaskTemplateId = '';
   await saveState();
   renderTaskTemplateList();
   setStatus(`已删除安排模板“${template.name}”。`, '', 4000);
@@ -4140,11 +4168,223 @@ async function deleteTaskTemplate(templateId) {
 function selectTaskTemplate(templateId) {
   if (selectedTaskTemplateId === templateId) {
     expandedTaskTemplateId = expandedTaskTemplateId === templateId ? '' : templateId;
+    if (expandedTaskTemplateId !== templateId) editingTaskTemplateId = '';
   } else {
     selectedTaskTemplateId = templateId;
     expandedTaskTemplateId = templateId;
+    editingTaskTemplateId = '';
   }
   renderTaskTemplateList();
+}
+
+function createTaskTemplateEditorHeading() {
+  const heading = document.createElement('div');
+  heading.className = 'task-template-editor-heading';
+  ['开始时间', '', '结束时间', '任务内容', '任务分类', ''].forEach((text) => {
+    const label = document.createElement('span');
+    label.textContent = text;
+    heading.appendChild(label);
+  });
+  return heading;
+}
+
+function createTaskTemplateEditor(templateId, task, itemIndex) {
+  const row = document.createElement('div');
+  row.className = 'task-template-editor-row';
+
+  const startTime = createTaskTemplateTimeEditor(
+    task.startTime,
+    '开始时间',
+    (value) => updateTaskTemplateItem(templateId, itemIndex, { startTime: value })
+  );
+  const separator = document.createElement('span');
+  separator.className = 'task-template-editor-separator';
+  separator.textContent = '—';
+  const endTime = createTaskTemplateTimeEditor(
+    task.endTime,
+    '结束时间',
+    (value) => updateTaskTemplateItem(templateId, itemIndex, { endTime: value })
+  );
+
+  const title = document.createElement('input');
+  title.type = 'text';
+  title.className = 'task-template-title-input';
+  title.value = task.title;
+  title.autocomplete = 'off';
+  title.setAttribute('aria-label', '任务内容');
+  let committedTitle = task.title;
+  const commitTitle = async () => {
+    const nextTitle = clean(title.value);
+    if (!nextTitle) {
+      title.value = committedTitle;
+      setStatus('模板中的任务内容不能为空。', 'error', 4000);
+      return;
+    }
+    title.value = nextTitle;
+    if (nextTitle === committedTitle) return;
+    title.disabled = true;
+    const saved = await updateTaskTemplateItem(templateId, itemIndex, { title: nextTitle });
+    title.disabled = false;
+    if (saved) committedTitle = nextTitle;
+    else title.value = committedTitle;
+  };
+  title.addEventListener('blur', () => void commitTitle());
+  title.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      title.blur();
+    } else if (event.key === 'Escape') {
+      title.value = committedTitle;
+      title.blur();
+    }
+  });
+
+  const category = createTypeSelect(task.typeId || task.type);
+  category.classList.add('task-template-category-select');
+  let committedCategoryId = category.value;
+  const commitCategory = async () => {
+    const nextCategoryId = category.value;
+    if (!nextCategoryId || nextCategoryId === committedCategoryId) return;
+    category.disabled = true;
+    const saved = await updateTaskTemplateItem(templateId, itemIndex, { typeId: nextCategoryId });
+    category.disabled = false;
+    if (saved) {
+      committedCategoryId = nextCategoryId;
+    } else {
+      category.value = committedCategoryId;
+      category.dataset.taskCategoryId = committedCategoryId;
+      styleTaskCategoryControl(category, taskCategoryById(committedCategoryId));
+    }
+  };
+  category.addEventListener('blur', () => void commitCategory());
+  category.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      category.blur();
+    } else if (event.key === 'Escape') {
+      category.value = committedCategoryId;
+      category.blur();
+    }
+  });
+
+  const deleteButton = document.createElement('button');
+  deleteButton.type = 'button';
+  deleteButton.className = 'task-template-task-delete-button';
+  deleteButton.textContent = '×';
+  deleteButton.title = `删除任务“${task.title}”`;
+  deleteButton.setAttribute('aria-label', deleteButton.title);
+  deleteButton.addEventListener('click', async () => {
+    deleteButton.disabled = true;
+    await deleteTaskTemplateItem(templateId, itemIndex);
+  });
+
+  row.append(startTime, separator, endTime, title, category, deleteButton);
+  return row;
+}
+
+function createTaskTemplateTimeEditor(value, label, onCommit) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'task-template-time-input';
+  input.value = formatClockDisplay(value);
+  input.inputMode = 'numeric';
+  input.maxLength = 5;
+  input.autocomplete = 'off';
+  input.setAttribute('aria-label', `${label}，请输入四位 24 小时制时间`);
+  let committedValue = clockDigitsToTime(value);
+
+  input.addEventListener('focus', () => input.select());
+  input.addEventListener('click', () => input.select());
+  input.addEventListener('beforeinput', (event) => {
+    if (event.inputType === 'insertText' && /\D/.test(event.data || '')) event.preventDefault();
+  });
+  input.addEventListener('input', () => {
+    input.value = formatClockDisplay(input.value);
+    const digits = formatClockDigits(input.value);
+    input.classList.toggle('time-invalid', digits.length === 4 && !clockDigitsToTime(input.value));
+  });
+  input.addEventListener('blur', async () => {
+    const nextValue = clockDigitsToTime(input.value);
+    if (!nextValue) {
+      input.value = committedValue;
+      input.classList.remove('time-invalid');
+      setStatus(`${label}格式不正确，请输入四位 24 小时制时间。`, 'error', 4000);
+      return;
+    }
+    input.value = nextValue;
+    if (nextValue === committedValue) return;
+    input.disabled = true;
+    const saved = await onCommit(nextValue);
+    input.disabled = false;
+    if (saved) committedValue = nextValue;
+    else input.value = committedValue;
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      input.blur();
+    } else if (event.key === 'Escape') {
+      input.value = committedValue;
+      input.classList.remove('time-invalid');
+      input.blur();
+    }
+  });
+  return input;
+}
+
+async function updateTaskTemplateItem(templateId, itemIndex, patch) {
+  const templates = taskTemplates();
+  const template = templates.find((item) => item.id === templateId);
+  if (!template || !template.items[itemIndex]) return false;
+
+  const categories = taskCategories();
+  const nextItems = template.items.map((item, index) => {
+    if (index !== itemIndex) return item;
+    const nextItem = { ...item, ...patch };
+    if (patch.typeId) {
+      const selectedCategory = taskCategoryById(patch.typeId, categories);
+      nextItem.typeId = selectedCategory ? selectedCategory.id : item.typeId;
+      nextItem.type = selectedCategory ? selectedCategory.name : item.type;
+    }
+    return nextItem;
+  });
+  return persistTaskTemplateItems(templateId, nextItems);
+}
+
+async function deleteTaskTemplateItem(templateId, itemIndex) {
+  const template = taskTemplates().find((item) => item.id === templateId);
+  if (!template || !template.items[itemIndex]) return;
+  const deletedTask = template.items[itemIndex];
+  const nextItems = template.items.filter((_, index) => index !== itemIndex);
+
+  if (nextItems.length === 0) {
+    await deleteTaskTemplate(templateId);
+    return;
+  }
+
+  const saved = await persistTaskTemplateItems(templateId, nextItems);
+  if (!saved) return;
+  renderTaskTemplateList();
+  setStatus(`已从模板中删除任务“${deletedTask.title}”。`, '', 4000);
+}
+
+async function persistTaskTemplateItems(templateId, items) {
+  const templates = taskTemplates();
+  const templateIndex = templates.findIndex((item) => item.id === templateId);
+  if (templateIndex < 0) return false;
+  const previousProfile = profile;
+  const nextTemplates = templates.map((template, index) => (
+    index === templateIndex ? { ...template, items } : template
+  ));
+  profile = { ...normalizedProfile(), taskTemplates: nextTemplates };
+  try {
+    await saveState();
+    return true;
+  } catch (error) {
+    profile = previousProfile;
+    setStatus(`保存模板修改失败：${error.message || String(error)}`, 'error', 5000);
+    return false;
+  }
 }
 
 function createTaskTemplatePreview(task) {

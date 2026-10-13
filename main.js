@@ -18,8 +18,8 @@ const ffmpegStaticPath = require('ffmpeg-static');
 
 const scheduleFileExtensions = ['xlsx', 'xls', 'csv', 'tsv'];
 const allowedExtensions = new Set(scheduleFileExtensions.map((extension) => `.${extension}`));
-const appIconPath = resolveAppAssetPath('rizhi_icon.ico');
-const appUiIconPath = resolveAppAssetPath('rizhi_icon.svg');
+const appIconPath = resolveAppAssetPath('rizhi.ico');
+const appUiIconPath = resolveAppAssetPath('rizhi.svg');
 let mainWindow = null;
 let floatingTaskWindow = null;
 let floatingTaskPayload = null;

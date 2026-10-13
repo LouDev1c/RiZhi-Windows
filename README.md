@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./rizhi_icon.svg" width="144" height="144" alt="日织应用图标" />
+  <img src="./rizhi.svg" width="144" height="144" alt="日织应用图标" />
 
   <h1>日织</h1>
 
