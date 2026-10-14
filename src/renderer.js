@@ -58,6 +58,7 @@ const statusBox = document.querySelector('#statusBox');
 const manualTaskButton = document.querySelector('#manualTaskButton');
 const importFileButton = document.querySelector('#importFileButton');
 const backToCurrentTaskButton = document.querySelector('#backToCurrentTaskButton');
+const contextualNowButtonLabel = document.querySelector('#contextualNowButtonLabel');
 const saveTaskTemplateButton = document.querySelector('#saveTaskTemplateButton');
 const saveTaskTemplateModal = document.querySelector('#saveTaskTemplateModal');
 const closeSaveTaskTemplateModalButton = document.querySelector('#closeSaveTaskTemplateModalButton');
@@ -137,6 +138,10 @@ const asrInputFeedback = document.querySelector('#asrInputFeedback');
 const journalTagSettingsList = document.querySelector('#journalTagSettingsList');
 const addJournalTagButton = document.querySelector('#addJournalTagButton');
 const taskCategorySettingsList = document.querySelector('#taskCategorySettingsList');
+const contextualNowShortcutValue = document.querySelector('#contextualNowShortcutValue');
+const customizeContextualNowShortcutButton = document.querySelector('#customizeContextualNowShortcutButton');
+const resetContextualNowShortcutButton = document.querySelector('#resetContextualNowShortcutButton');
+const shortcutSettingsStatus = document.querySelector('#shortcutSettingsStatus');
 const addTaskCategoryButton = document.querySelector('#addTaskCategoryButton');
 const taskCategorySettingsStatus = document.querySelector('#taskCategorySettingsStatus');
 const deleteMultipleDates = document.querySelector('#deleteMultipleDates');
@@ -317,6 +322,24 @@ let journalVoiceOriginalContent = '';
 let journalVoiceOriginalInsertionPoint = null;
 let journalVoiceSilenceTimer = null;
 let journalVoiceLastSoundAt = 0;
+let shortcutCaptureActive = false;
+
+const DEFAULT_SHORTCUTS = Object.freeze({
+  contextualNow: 'Ctrl+Alt+C'
+});
+const RESERVED_SHORTCUTS = new Set([
+  'Ctrl+S',
+  'Ctrl+Z',
+  'Ctrl+Y',
+  'Ctrl+Shift+Z',
+  'Ctrl+C',
+  'Ctrl+V',
+  'Ctrl+X',
+  'Ctrl+A',
+  'Ctrl+R',
+  'Ctrl+W',
+  'Ctrl+Shift+I'
+]);
 let journalVoiceWarningTimer = null;
 let journalVoiceMaximumTimer = null;
 let journalVoiceTimerInterval = null;
@@ -439,6 +462,13 @@ const tutorialSteps = [
   },
   {
     page: 'settings',
+    settingPanel: 'shortcuts',
+    targetSelector: '.settings-shortcuts-panel',
+    title: '快捷键',
+    text: '点击“自定义”后按下组合键，即可为列出的操作设置应用内快捷键。定位快捷键默认是 Ctrl+Alt+C。'
+  },
+  {
+    page: 'settings',
     settingPanel: 'asr-test',
     targetSelector: '.settings-asr-test-panel',
     title: '离线语音识别',
@@ -448,7 +478,7 @@ const tutorialSteps = [
     page: 'tasks',
     targetSelector: '#backToCurrentTaskButton',
     title: '定位按钮',
-    text: '左下角按钮可以回到任务页并定位到当前正在进行的安排，查看其他日期或滚动列表后也能一键回到现在。'
+    text: '左下角定位键会随页面变化：任务和设置显示“现”，记录显示“今”，统计会显示今、周、月、季或年。点击后会回到当前任务、当天记录或当前统计周期。'
   },
   {
     page: 'tasks',
@@ -493,8 +523,6 @@ document.querySelectorAll('.date-step-button').forEach((button) => {
   button.addEventListener('mousedown', (event) => event.preventDefault());
   button.addEventListener('click', handleDateStepButton);
 });
-addTodayButtonsToDateInputs();
-
 if (tutorialButton) tutorialButton.addEventListener('click', openTutorialConfirmModal);
 if (refreshStatusButton) refreshStatusButton.addEventListener('click', refreshApplicationStatus);
 if (tutorialConfirmNoButton) tutorialConfirmNoButton.addEventListener('click', closeTutorialConfirmModal);
@@ -503,6 +531,12 @@ if (tutorialYesButton) tutorialYesButton.addEventListener('click', startTutorial
 if (tutorialPrevButton) tutorialPrevButton.addEventListener('click', showPreviousTutorialStep);
 if (tutorialNextButton) tutorialNextButton.addEventListener('click', showNextTutorialStep);
 if (tutorialCloseButton) tutorialCloseButton.addEventListener('click', finishTutorial);
+if (customizeContextualNowShortcutButton) {
+  customizeContextualNowShortcutButton.addEventListener('click', beginContextualNowShortcutCapture);
+}
+if (resetContextualNowShortcutButton) {
+  resetContextualNowShortcutButton.addEventListener('click', () => void resetContextualNowShortcut());
+}
 tutorialConfirmModal.addEventListener('click', (event) => {
   if (event.target === tutorialConfirmModal) closeTutorialConfirmModal();
 });
@@ -525,6 +559,8 @@ document.addEventListener('pointerdown', (event) => {
   if (taskTimePicker.contains(event.target) || event.target.closest('.task-time-button')) return;
   closeTaskTimePicker();
 });
+document.addEventListener('keydown', handleShortcutCapture, true);
+document.addEventListener('keydown', handleConfiguredShortcut, true);
 document.addEventListener('keydown', handleTaskHistoryShortcut);
 taskList.addEventListener('scroll', positionTaskTimePicker);
 cancelTaskTimePickerButton.addEventListener('click', closeTaskTimePicker);
@@ -543,9 +579,7 @@ taskTimePicker.querySelectorAll('[data-time-step]').forEach((button) => {
 if (window.whbr.onHistoryUndo) window.whbr.onHistoryUndo(handleTaskHistoryUndo);
 if (window.whbr.onHistoryRedo) window.whbr.onHistoryRedo(handleTaskHistoryRedo);
 
-backToCurrentTaskButton.addEventListener('click', async () => {
-  if (await confirmLeaveRecordsPageIfNeeded('tasks')) goToCurrentTask();
-});
+backToCurrentTaskButton.addEventListener('click', () => void goToContextualNow());
 if (manualTaskButton) manualTaskButton.addEventListener('click', openImportChoiceModal);
 if (saveTaskTemplateButton) saveTaskTemplateButton.addEventListener('click', openSaveTaskTemplateModal);
 if (reuseTemplateButton) reuseTemplateButton.addEventListener('click', openReuseTemplateModal);
@@ -2092,6 +2126,202 @@ function currentPageKey() {
   return Object.entries(pages).find(([, page]) => page.classList.contains('active'))?.[0] || 'tasks';
 }
 
+function updateContextualNowButton() {
+  if (!backToCurrentTaskButton || !contextualNowButtonLabel) return;
+  const page = currentPageKey();
+  const period = profileStatsPeriod?.value || 'week';
+  const statsButton = {
+    day: { label: '今', title: '回到今天统计' },
+    week: { label: '周', title: '回到本周统计' },
+    month: { label: '月', title: '回到本月统计' },
+    quarter: { label: '季', title: '回到本季度统计' },
+    year: { label: '年', title: '回到本年统计' }
+  }[period] || { label: '周', title: '回到本周统计' };
+  const state = page === 'records'
+    ? { label: '今', title: '回到今天记录' }
+    : page === 'profile'
+      ? statsButton
+      : { label: '现', title: '定位当前任务' };
+
+  contextualNowButtonLabel.textContent = state.label;
+  const shortcut = configuredShortcuts().contextualNow;
+  const description = `${state.title}（${shortcut}）`;
+  backToCurrentTaskButton.title = description;
+  backToCurrentTaskButton.setAttribute('aria-label', description);
+}
+
+function shortcutKeyFromEvent(event) {
+  const key = String(event.key || '');
+  if (!key || ['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return '';
+  if (key === ' ') return 'Space';
+  if (key.length === 1) return key.toUpperCase();
+  return `${key.slice(0, 1).toUpperCase()}${key.slice(1)}`;
+}
+
+function shortcutFromEvent(event) {
+  const key = shortcutKeyFromEvent(event);
+  if (!key) return '';
+  const modifiers = [];
+  if (event.ctrlKey) modifiers.push('Ctrl');
+  if (event.altKey) modifiers.push('Alt');
+  if (event.shiftKey) modifiers.push('Shift');
+  if (event.metaKey) modifiers.push('Meta');
+  return [...modifiers, key].join('+');
+}
+
+function normalizeShortcut(shortcut, fallback) {
+  if (typeof shortcut !== 'string') return fallback;
+  const tokens = shortcut.split('+').map((token) => token.trim()).filter(Boolean);
+  if (tokens.length < 2) return fallback;
+  const modifierSet = new Set(tokens.slice(0, -1).map((token) => token.toLowerCase()));
+  const key = tokens.at(-1);
+  const modifiers = [];
+  if (modifierSet.has('ctrl') || modifierSet.has('control')) modifiers.push('Ctrl');
+  if (modifierSet.has('alt') || modifierSet.has('option')) modifiers.push('Alt');
+  if (modifierSet.has('shift')) modifiers.push('Shift');
+  if (modifierSet.has('meta') || modifierSet.has('command') || modifierSet.has('cmd')) modifiers.push('Meta');
+  if (modifiers.length === 0 || !key) return fallback;
+  return [...modifiers, shortcutKeyFromEvent({ key })].filter(Boolean).join('+') || fallback;
+}
+
+function configuredShortcuts() {
+  return normalizeShortcutSettings(profile && profile.shortcuts);
+}
+
+function normalizeShortcutSettings(shortcuts) {
+  const source = shortcuts && typeof shortcuts === 'object' && !Array.isArray(shortcuts)
+    ? shortcuts
+    : {};
+  return {
+    contextualNow: normalizeShortcut(source.contextualNow, DEFAULT_SHORTCUTS.contextualNow)
+  };
+}
+
+function renderShortcutSettings() {
+  const shortcut = configuredShortcuts().contextualNow;
+  if (contextualNowShortcutValue) contextualNowShortcutValue.textContent = shortcut;
+  if (customizeContextualNowShortcutButton) {
+    customizeContextualNowShortcutButton.textContent = shortcutCaptureActive ? '请按组合键…' : '自定义';
+    customizeContextualNowShortcutButton.classList.toggle('is-capturing', shortcutCaptureActive);
+  }
+}
+
+function setShortcutSettingsStatus(message = '', isError = false) {
+  if (!shortcutSettingsStatus) return;
+  shortcutSettingsStatus.textContent = message;
+  shortcutSettingsStatus.classList.toggle('hidden', !message);
+  shortcutSettingsStatus.classList.toggle('is-error', Boolean(message && isError));
+}
+
+function beginContextualNowShortcutCapture() {
+  shortcutCaptureActive = true;
+  setShortcutSettingsStatus('请按下新的组合键，按 Esc 取消。');
+  renderShortcutSettings();
+}
+
+function cancelShortcutCapture() {
+  shortcutCaptureActive = false;
+  setShortcutSettingsStatus('已取消自定义。');
+  renderShortcutSettings();
+}
+
+function handleShortcutCapture(event) {
+  if (!shortcutCaptureActive) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+
+  if (event.key === 'Escape') {
+    cancelShortcutCapture();
+    return;
+  }
+  if (event.repeat || !shortcutKeyFromEvent(event)) return;
+
+  const shortcut = shortcutFromEvent(event);
+  if (!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) {
+    setShortcutSettingsStatus('请按下带 Ctrl、Alt 或 Shift 的组合键。', true);
+    return;
+  }
+  if (RESERVED_SHORTCUTS.has(shortcut)) {
+    setShortcutSettingsStatus('该组合键已用于保存、撤销或系统常用操作，请换一个组合键。', true);
+    return;
+  }
+  void saveContextualNowShortcut(shortcut);
+}
+
+async function saveContextualNowShortcut(shortcut) {
+  const previousProfile = profile;
+  shortcutCaptureActive = false;
+  profile = {
+    ...normalizedProfile(),
+    shortcuts: {
+      ...configuredShortcuts(),
+      contextualNow: shortcut
+    }
+  };
+  renderShortcutSettings();
+  updateContextualNowButton();
+  try {
+    await saveState();
+    setShortcutSettingsStatus(`已将统一定位快捷键设为 ${shortcut}。`);
+    return true;
+  } catch (error) {
+    profile = previousProfile;
+    renderShortcutSettings();
+    updateContextualNowButton();
+    setShortcutSettingsStatus(`保存快捷键失败：${error.message || String(error)}`, true);
+    return false;
+  }
+}
+
+async function resetContextualNowShortcut() {
+  if (configuredShortcuts().contextualNow === DEFAULT_SHORTCUTS.contextualNow) {
+    setShortcutSettingsStatus('统一定位快捷键已经是默认值。');
+    return;
+  }
+  if (await saveContextualNowShortcut(DEFAULT_SHORTCUTS.contextualNow)) {
+    setShortcutSettingsStatus(`已恢复默认快捷键 ${DEFAULT_SHORTCUTS.contextualNow}。`);
+  }
+}
+
+function handleConfiguredShortcut(event) {
+  if (shortcutCaptureActive || event.repeat) return;
+  if (shortcutFromEvent(event) !== configuredShortcuts().contextualNow) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  void goToContextualNow();
+}
+
+async function goToContextualNow() {
+  const page = currentPageKey();
+  if (page === 'records') {
+    await goToTodayJournal();
+    return;
+  }
+  if (page === 'profile') {
+    await goToCurrentProfilePeriod();
+    return;
+  }
+  if (await confirmLeaveRecordsPageIfNeeded('tasks')) goToCurrentTask();
+}
+
+async function goToTodayJournal() {
+  const now = await getEffectiveNow();
+  currentEffectiveNow = now;
+  const today = formatLocalDate(now);
+  showPage('records');
+  showRecordsView('editor');
+  const previousDate = committedDateInputValue(journalDate);
+  setDateInputValue(journalDate, today, { trigger: true });
+  if (previousDate === today) renderSelectedJournal();
+}
+
+async function goToCurrentProfilePeriod() {
+  const now = await getEffectiveNow();
+  currentEffectiveNow = now;
+  setProfileStatsReferenceDate(formatLocalDate(now));
+  updateContextualNowButton();
+}
+
 function handleDateStepButton(event) {
   const button = event.currentTarget;
   const input = document.querySelector(`#${button.dataset.dateStepFor}`);
@@ -2104,39 +2334,6 @@ function handleDateStepButton(event) {
   if (!nextDate || !isSelectableDate(nextDate)) return;
 
   setDateInputValue(input, nextDate, { trigger: true });
-  input.blur();
-  button.blur();
-}
-
-function addTodayButtonsToDateInputs() {
-  document.querySelectorAll('input[type="date"]').forEach((input) => {
-    if (input.dataset.hideTodayButton === 'true') return;
-    const label = input.closest('label');
-    const labelText = label && Array.from(label.children).find((child) => child.tagName === 'SPAN');
-    if (!label || !labelText || !input.id) return;
-
-    const labelRow = document.createElement('span');
-    labelRow.className = 'date-label-row';
-    const todayButton = document.createElement('button');
-    todayButton.className = 'date-today-button';
-    todayButton.type = 'button';
-    todayButton.textContent = '今天';
-    todayButton.title = '返回当天日期';
-    todayButton.setAttribute('aria-label', '返回当天日期');
-    todayButton.addEventListener('mousedown', (event) => event.preventDefault());
-    todayButton.addEventListener('click', handleDateTodayButton);
-
-    label.insertBefore(labelRow, labelText);
-    labelRow.append(labelText, todayButton);
-  });
-}
-
-function handleDateTodayButton(event) {
-  const button = event.currentTarget;
-  const input = button.closest('label')?.querySelector('input[type="date"]');
-  if (!input) return;
-
-  setDateInputValue(input, formatLocalDate(currentEffectiveNow || new Date()), { trigger: true });
   input.blur();
   button.blur();
 }
@@ -3639,6 +3836,7 @@ function setProfileStatsReferenceDate(date, options = {}) {
 
 function handleProfileStatsPeriodChange() {
   setProfileStatsReferenceDate(committedProfileStatsStartDate || formatLocalDate(currentEffectiveNow || new Date()));
+  updateContextualNowButton();
 }
 
 function commitProfileStatsMonthReference() {
@@ -3707,19 +3905,6 @@ function syncProfileStatsReferenceControls() {
   if (previousButton) previousButton.setAttribute('aria-label', period === 'week' ? '前一周' : '前一天');
   if (nextButton) nextButton.setAttribute('aria-label', period === 'week' ? '后一周' : '后一天');
 
-  const currentPeriodButton = profileStatsReferencePicker?.querySelector('.date-today-button');
-  if (currentPeriodButton) {
-    const buttonText = {
-      day: '今天',
-      week: '本周',
-      month: '本月',
-      quarter: '本季度',
-      year: '本年'
-    }[period];
-    currentPeriodButton.textContent = buttonText;
-    currentPeriodButton.title = `返回${buttonText}`;
-    currentPeriodButton.setAttribute('aria-label', `返回${buttonText}`);
-  }
 }
 
 function renderProfilePlanAllocation(rangeDates, rangeTasks, minutesByType, totalMinutes) {
@@ -3865,6 +4050,7 @@ function renderAll() {
 }
 
 function showPage(page) {
+  if (page !== 'settings' && shortcutCaptureActive) cancelShortcutCapture();
   closeTaskTimePicker();
   navItems.forEach((navItem) => {
     navItem.classList.toggle('active', navItem.dataset.page === page);
@@ -3872,6 +4058,7 @@ function showPage(page) {
   Object.values(pages).forEach((section) => section.classList.remove('active'));
   pages[page].classList.add('active');
   pageTitle.textContent = pageTitleFor(page);
+  updateContextualNowButton();
   updateSettingsAsrDownloadProgress();
   if (page === 'records') showRecordsView('editor');
   if (page === 'profile') renderProfileStats();
@@ -3899,6 +4086,7 @@ function showSettingsPanel(panelKey) {
     panel.classList.toggle('hidden', panel.dataset.settingsPanel !== normalizedKey);
   });
   if (settingsEmptyPanel) settingsEmptyPanel.classList.toggle('hidden', Boolean(normalizedKey));
+  if (normalizedKey === 'shortcuts') renderShortcutSettings();
 }
 
 function clearSettingsPanel() {
@@ -6224,6 +6412,7 @@ function defaultProfile() {
     journalTags: defaultJournalTags(),
     taskCategories: cloneDefaultTaskCategories(),
     taskTemplates: [],
+    shortcuts: { ...DEFAULT_SHORTCUTS },
     defaultsVersion: '0.2.0'
   };
 }
@@ -6240,6 +6429,7 @@ function normalizedProfile() {
     ...defaultProfile(),
     ...systemTimeProfile,
     journalTags: normalizeJournalTags(systemTimeProfile.journalTags),
+    shortcuts: normalizeShortcutSettings(systemTimeProfile.shortcuts),
     taskCategories: normalizeRawTaskCategories(systemTimeProfile.taskCategories),
     taskTemplates: normalizeTaskTemplates(
       systemTimeProfile.taskTemplates,
@@ -6958,6 +7148,7 @@ async function initializeAppData() {
     populateJournalTagSelects();
     renderJournalTagSettings();
     renderTaskCategorySettings();
+    renderShortcutSettings();
     await migrateLegacyLocalStorageIfNeeded();
     if (migratedProfile.changed || migratedTaskCategories.changed || migratedTasks.changed) await saveState();
     updateStoragePathView();
@@ -6974,6 +7165,11 @@ async function initializeAppData() {
 function migrateProfileDefaults(profileData) {
   const migrated = { ...profileData };
   let changed = false;
+  const normalizedShortcuts = normalizeShortcutSettings(migrated.shortcuts);
+  if (JSON.stringify(migrated.shortcuts || {}) !== JSON.stringify(normalizedShortcuts)) {
+    migrated.shortcuts = normalizedShortcuts;
+    changed = true;
+  }
   const normalizedTags = normalizeJournalTags(migrated.journalTags);
   if (JSON.stringify(migrated.journalTags || []) !== JSON.stringify(normalizedTags)) {
     migrated.journalTags = normalizedTags;
@@ -7490,6 +7686,7 @@ async function startApp() {
   updateDeletePeriodFields();
   committedProfileStatsStartDate = today;
   syncProfileStatsReferenceControls();
+  updateContextualNowButton();
 
   await initializeAppData();
   await refreshSystemTime();

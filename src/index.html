@@ -39,8 +39,8 @@
           </button>
         </nav>
 
-        <button id="backToCurrentTaskButton" class="now-task-button" type="button" title="回到当前任务" aria-label="回到当前任务">
-          <span>⌖</span>
+        <button id="backToCurrentTaskButton" class="now-task-button" type="button" title="定位当前任务" aria-label="定位当前任务">
+          <span id="contextualNowButtonLabel">现</span>
         </button>
       </aside>
 
@@ -252,6 +252,7 @@
                 <button class="settings-menu-item" type="button" data-settings-panel="danger">数据删除</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="task-categories">任务分类</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="tags">标签</button>
+                <button class="settings-menu-item" type="button" data-settings-panel="shortcuts">快捷键</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="asr-test">语音识别测试</button>
               </div>
             </aside>
@@ -364,6 +365,28 @@
                 <p class="muted">自定义日子印记的名称和颜色。一天可以选择多个标签，也可以不设置；筛选多个标签时会显示同时包含这些标签的记录。</p>
                 <div id="journalTagSettingsList" class="tag-settings-list"></div>
                 <button id="addJournalTagButton" class="secondary-button" type="button">新增标签</button>
+              </section>
+
+              <section class="panel settings-shortcuts-panel hidden" data-settings-panel="shortcuts">
+                <h2>快捷键</h2>
+                <p class="muted">快捷键仅在日织处于前台时生效。点击“自定义”后，按下带 Ctrl、Alt 或 Shift 的组合键即可保存。</p>
+                <div class="shortcut-settings-list">
+                  <article class="shortcut-settings-row">
+                    <div class="shortcut-setting-description">
+                      <strong>统一定位</strong>
+                      <p>执行左下角定位按钮当前页面对应的操作。</p>
+                    </div>
+                    <div class="shortcut-current-value">
+                      <span>当前快捷键</span>
+                      <kbd id="contextualNowShortcutValue">Ctrl+Alt+C</kbd>
+                    </div>
+                    <div class="shortcut-setting-actions">
+                      <button id="customizeContextualNowShortcutButton" class="secondary-button" type="button">自定义</button>
+                      <button id="resetContextualNowShortcutButton" class="icon-button" type="button" title="恢复默认快捷键" aria-label="恢复默认快捷键">↺</button>
+                    </div>
+                  </article>
+                </div>
+                <p id="shortcutSettingsStatus" class="form-feedback hidden" role="status"></p>
               </section>
 
               <section class="panel settings-asr-test-panel hidden" data-settings-panel="asr-test">
@@ -835,7 +858,7 @@
           <button id="tutorialConfirmNoButton" class="icon-button" aria-label="关闭">×</button>
         </div>
 
-        <p class="muted">教程会依次介绍任务创建与模板、完成情况与备注、生活记录、语音输入、照片和视频归档、记录筛选、周期回顾、数据管理、任务分类、标签和定位按钮。教程过程中可以随时退出。</p>
+        <p class="muted">教程会依次介绍任务创建与模板、完成情况与备注、生活记录、语音输入、照片和视频归档、记录筛选、周期回顾、数据管理、任务分类、标签、快捷键和统一定位按钮。教程过程中可以随时退出。</p>
 
         <div class="modal-actions">
           <button id="tutorialNoButton" class="secondary-button" type="button">否</button>

@@ -76,29 +76,10 @@ button {
   width: 100%;
   height: 100%;
   place-items: center;
-  position: relative;
-  color: transparent;
-  font-size: 0;
+  color: var(--accent-dark);
+  font-size: 18px;
   font-weight: 800;
   line-height: 1;
-}
-
-.now-task-button span::before,
-.now-task-button span::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 18px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--accent-dark);
-  content: "";
-  transform: translate(-50%, -50%);
-}
-
-.now-task-button span::after {
-  width: 2px;
-  height: 18px;
 }
 
 .brand {
@@ -1579,9 +1560,93 @@ h2 {
 }
 
 .settings-tags-panel,
-.settings-task-categories-panel {
+.settings-task-categories-panel,
+.settings-shortcuts-panel {
   width: min(100%, 880px);
   overflow-x: hidden;
+}
+
+.shortcut-settings-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.shortcut-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.shortcut-setting-description strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.shortcut-setting-description p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.shortcut-current-value {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.shortcut-current-value kbd {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid #cfd5dc;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.shortcut-setting-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcut-setting-actions .icon-button {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 21px;
+}
+
+.shortcut-setting-actions .secondary-button.is-capturing {
+  border-color: var(--accent);
+  background: #edf8f1;
+  color: var(--accent-dark);
+}
+
+.settings-shortcuts-panel .form-feedback {
+  margin: 12px 0 0;
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.settings-shortcuts-panel .form-feedback.is-error {
+  color: var(--danger);
 }
 
 .task-category-settings-list {
@@ -1813,33 +1878,6 @@ h2 {
   min-width: 184px;
   color: #47505a;
   font-size: 12px;
-}
-
-.date-label-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-}
-
-.date-today-button {
-  min-height: 20px;
-  padding: 1px 6px;
-  border: 1px solid #d5d9de;
-  border-radius: 5px;
-  background: #f1f3f5;
-  color: #59636e;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.25;
-  cursor: pointer;
-}
-
-.date-today-button:hover,
-.date-today-button:focus-visible {
-  border-color: var(--accent);
-  color: var(--accent-dark);
-  outline: none;
 }
 
 .compact-date-picker input {
@@ -3799,6 +3837,15 @@ h2 {
 
   .task-category-settings-header {
     grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .shortcut-settings-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .shortcut-setting-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 
   .task-category-header-actions {
