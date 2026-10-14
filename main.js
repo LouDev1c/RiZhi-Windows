@@ -39,6 +39,14 @@ let tray = null;
 let isQuitting = false;
 let isClosePromptShowing = false;
 let isUpdatePromptShowing = false;
+let updateCheckInFlight = null;
+let updateCheckSource = '';
+let updateState = {
+  status: 'idle',
+  version: '',
+  progress: null,
+  error: ''
+};
 let asrService = null;
 let asrPathChangeInProgress = false;
 const mediaUploadSessions = new Map();
@@ -114,13 +122,15 @@ function setupAutoUpdater() {
 
   autoUpdater.on('checking-for-update', () => {
     console.log('RiZhi: checking for updates...');
+    setUpdateState({ status: 'checking', version: '', progress: null, error: '' });
   });
 
   autoUpdater.on('update-available', async (info) => {
     const versionLabel = formatVersionLabel(info.version);
     console.log(`RiZhi: update available: ${versionLabel}`);
+    setUpdateState({ status: 'available', version: info.version || '', progress: null, error: '' });
 
-    if (isUpdatePromptShowing) return;
+    if (updateCheckSource === 'manual' || isUpdatePromptShowing) return;
     isUpdatePromptShowing = true;
 
     const result = await dialog.showMessageBox(mainWindow || undefined, {
@@ -136,23 +146,28 @@ function setupAutoUpdater() {
 
     isUpdatePromptShowing = false;
 
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
-    }
+    if (result.response === 0) void downloadAppUpdate();
   });
 
   autoUpdater.on('update-not-available', () => {
     console.log('RiZhi: already up to date.');
+    setUpdateState({ status: 'up-to-date', version: '', progress: null, error: '' });
   });
 
   autoUpdater.on('download-progress', (progress) => {
     console.log(
       `RiZhi: update download ${progress.percent.toFixed(1)}%`
     );
+    setUpdateState({
+      status: 'downloading',
+      progress: Number.isFinite(progress.percent) ? progress.percent : null,
+      error: ''
+    });
   });
 
   autoUpdater.on('update-downloaded', async (info) => {
     const versionLabel = formatVersionLabel(info.version);
+    setUpdateState({ status: 'downloaded', version: info.version || '', progress: 100, error: '' });
     await dialog.showMessageBox(mainWindow || undefined, {
       type: 'info',
       title: '日织更新',
@@ -170,9 +185,83 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', (error) => {
     console.error('RiZhi updater error:', error);
+    setUpdateState({
+      status: 'error',
+      progress: null,
+      error: error && error.message ? error.message : '检查更新时出现未知错误。'
+    });
   });
 
-  autoUpdater.checkForUpdates();
+  void checkForAppUpdates('automatic');
+}
+
+function getUpdateState() {
+  return {
+    ...updateState,
+    currentVersion: app.getVersion(),
+    packaged: app.isPackaged
+  };
+}
+
+function setUpdateState(nextState) {
+  updateState = { ...updateState, ...nextState };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app:update-status', getUpdateState());
+  }
+}
+
+async function checkForAppUpdates(source = 'manual') {
+  if (!app.isPackaged) {
+    setUpdateState({
+      status: 'unavailable',
+      version: '',
+      progress: null,
+      error: '当前为开发环境；请在安装版中检查版本更新。'
+    });
+    return getUpdateState();
+  }
+  if (updateCheckInFlight) return updateCheckInFlight;
+
+  updateCheckSource = source;
+  updateCheckInFlight = (async () => {
+    setUpdateState({ status: 'checking', version: '', progress: null, error: '' });
+    try {
+      await autoUpdater.checkForUpdates();
+      return getUpdateState();
+    } catch (error) {
+      console.error('RiZhi updater check error:', error);
+      setUpdateState({
+        status: 'error',
+        progress: null,
+        error: error && error.message ? error.message : '检查更新时出现未知错误。'
+      });
+      return getUpdateState();
+    } finally {
+      updateCheckInFlight = null;
+      updateCheckSource = '';
+    }
+  })();
+  return updateCheckInFlight;
+}
+
+async function downloadAppUpdate() {
+  if (!app.isPackaged) {
+    return checkForAppUpdates('manual');
+  }
+  if (updateState.status !== 'available') return getUpdateState();
+
+  setUpdateState({ status: 'downloading', progress: 0, error: '' });
+  try {
+    await autoUpdater.downloadUpdate();
+  } catch (error) {
+    console.error('RiZhi updater download error:', error);
+    setUpdateState({
+      status: 'error',
+      progress: null,
+      error: error && error.message ? error.message : '下载更新时出现未知错误。'
+    });
+  }
+  return getUpdateState();
 }
 
 function formatVersionLabel(version) {
@@ -805,6 +894,21 @@ ipcMain.handle('app:getIconUrl', () => {
 
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
+});
+
+ipcMain.handle('app:getUpdateStatus', (event) => {
+  if (!isMainWindowSender(event)) return { status: 'error', error: '不允许的更新状态请求。' };
+  return getUpdateState();
+});
+
+ipcMain.handle('app:checkForUpdates', async (event) => {
+  if (!isMainWindowSender(event)) return { status: 'error', error: '不允许的更新检查请求。' };
+  return checkForAppUpdates('manual');
+});
+
+ipcMain.handle('app:downloadUpdate', async (event) => {
+  if (!isMainWindowSender(event)) return { status: 'error', error: '不允许的更新下载请求。' };
+  return downloadAppUpdate();
 });
 
 ipcMain.handle('media:startUploadSession', async (event, payload = {}) => {

@@ -121,6 +121,10 @@ const openModelDirectoryButton = document.querySelector('#openModelDirectoryButt
 const settingsMenuButtons = document.querySelectorAll('.settings-menu-item');
 const settingsPanels = document.querySelectorAll('[data-settings-panel].panel');
 const settingsEmptyPanel = document.querySelector('#settingsEmptyPanel');
+const updateCurrentVersion = document.querySelector('#updateCurrentVersion');
+const updateCheckStatus = document.querySelector('#updateCheckStatus');
+const checkForUpdatesButton = document.querySelector('#checkForUpdatesButton');
+const downloadUpdateButton = document.querySelector('#downloadUpdateButton');
 const asrTestStartButton = document.querySelector('#asrTestStartButton');
 const asrTestStopButton = document.querySelector('#asrTestStopButton');
 const asrTestStatus = document.querySelector('#asrTestStatus');
@@ -304,6 +308,7 @@ let asrTestCaptureUnsubscribe = null;
 let asrTestRecording = false;
 let asrModelDownloadInFlight = false;
 let latestAsrModelStatus = null;
+let latestUpdateStatus = { status: 'idle', version: '', progress: null, error: '' };
 let microphoneTestCapture = null;
 let microphoneTestUnsubscribe = null;
 let microphoneTestRecording = false;
@@ -441,6 +446,13 @@ const tutorialSteps = [
   },
   {
     page: 'settings',
+    settingPanel: 'updates',
+    targetSelector: '.settings-updates-panel',
+    title: '版本更新',
+    text: '这里可手动查看版本更新。已是最新版本时会明确提示；发现新版本后可以点击升级并下载，完成后日织会重启安装。'
+  },
+  {
+    page: 'settings',
     settingPanel: 'danger',
     targetSelector: '.danger-panel',
     title: '删除本地内容',
@@ -506,6 +518,8 @@ settingsMenuButtons.forEach((button) => {
 if (asrTestStartButton) asrTestStartButton.addEventListener('click', startRecording);
 if (asrTestStopButton) asrTestStopButton.addEventListener('click', stopRecording);
 if (asrModelDownloadButton) asrModelDownloadButton.addEventListener('click', downloadAsrModelFromSettings);
+if (checkForUpdatesButton) checkForUpdatesButton.addEventListener('click', () => void checkForApplicationUpdates());
+if (downloadUpdateButton) downloadUpdateButton.addEventListener('click', () => void downloadApplicationUpdate());
 if (asrRefreshDevicesButton) asrRefreshDevicesButton.addEventListener('click', refreshAudioInputDevices);
 if (asrMicTestStartButton) asrMicTestStartButton.addEventListener('click', startMicrophoneTest);
 if (asrMicTestStopButton) asrMicTestStopButton.addEventListener('click', stopMicrophoneTest);
@@ -518,6 +532,7 @@ if (journalContent) {
   journalContent.addEventListener('input', updateJournalDirtyState);
 }
 subscribeToAsrTestEvents();
+subscribeToUpdateEvents();
 
 document.querySelectorAll('.date-step-button').forEach((button) => {
   button.addEventListener('mousedown', (event) => event.preventDefault());
@@ -1505,6 +1520,90 @@ function updateSettingsAsrDownloadProgress(status = latestAsrModelStatus) {
   else if (progress.phase === 'verifying') settingsAsrDownloadProgress.textContent = '正在校验语音模型…';
   else if (Number.isFinite(progress.percent)) settingsAsrDownloadProgress.textContent = `正在下载模型 ${progress.percent}%`;
   else settingsAsrDownloadProgress.textContent = '正在准备模型下载…';
+}
+
+function getUpdateApi() {
+  return window.whbr && window.whbr.updates ? window.whbr.updates : null;
+}
+
+function formatUpdateVersion(version) {
+  const value = clean(version);
+  if (!value) return '';
+  return value.startsWith('v') ? value : `v${value}`;
+}
+
+function updateVersionPanel(status = latestUpdateStatus) {
+  latestUpdateStatus = status && typeof status === 'object' ? status : { status: 'idle' };
+  const state = latestUpdateStatus.status || 'idle';
+  const version = formatUpdateVersion(latestUpdateStatus.version);
+  const currentVersion = formatUpdateVersion(latestUpdateStatus.currentVersion);
+  if (updateCurrentVersion && currentVersion) updateCurrentVersion.textContent = `版本 ${currentVersion}`;
+
+  const message = {
+    idle: '尚未检查更新。',
+    checking: '正在检查新版本…',
+    'up-to-date': '已经是最新版本。',
+    available: `发现 ${version || '新版本'}，可以升级。`,
+    downloaded: `${version || '新版本'} 已下载完成，正在准备安装。`,
+    unavailable: latestUpdateStatus.error || '当前环境无法检查版本更新。',
+    error: latestUpdateStatus.error || '检查更新失败，请稍后重试。'
+  }[state] || '尚未检查更新。';
+  const downloadingMessage = Number.isFinite(Number(latestUpdateStatus.progress))
+    ? `正在下载 ${version || '新版本'}：${Math.round(Number(latestUpdateStatus.progress))}%`
+    : `正在下载 ${version || '新版本'}…`;
+
+  if (updateCheckStatus) {
+    updateCheckStatus.textContent = state === 'downloading' ? downloadingMessage : message;
+    updateCheckStatus.classList.toggle('is-error', state === 'error');
+  }
+  if (checkForUpdatesButton) {
+    checkForUpdatesButton.disabled = state === 'checking' || state === 'downloading';
+    checkForUpdatesButton.textContent = state === 'checking' ? '检查中…' : '查看版本更新';
+  }
+  if (downloadUpdateButton) {
+    const canDownload = state === 'available';
+    downloadUpdateButton.classList.toggle('hidden', !canDownload);
+    downloadUpdateButton.disabled = !canDownload;
+    downloadUpdateButton.textContent = version ? `升级至 ${version}` : '升级至新版本';
+  }
+}
+
+function subscribeToUpdateEvents() {
+  const api = getUpdateApi();
+  if (!api || typeof api.onStatus !== 'function') return;
+  api.onStatus((status) => updateVersionPanel(status));
+}
+
+async function refreshUpdateStatus() {
+  const api = getUpdateApi();
+  if (!api || typeof api.getStatus !== 'function') return;
+  try {
+    updateVersionPanel(await api.getStatus());
+  } catch (error) {
+    updateVersionPanel({ status: 'error', error: error.message || String(error) });
+  }
+}
+
+async function checkForApplicationUpdates() {
+  const api = getUpdateApi();
+  if (!api || typeof api.check !== 'function') return;
+  updateVersionPanel({ ...latestUpdateStatus, status: 'checking', error: '' });
+  try {
+    updateVersionPanel(await api.check());
+  } catch (error) {
+    updateVersionPanel({ status: 'error', error: error.message || String(error) });
+  }
+}
+
+async function downloadApplicationUpdate() {
+  const api = getUpdateApi();
+  if (!api || typeof api.download !== 'function') return;
+  updateVersionPanel({ ...latestUpdateStatus, status: 'downloading', progress: 0, error: '' });
+  try {
+    updateVersionPanel(await api.download());
+  } catch (error) {
+    updateVersionPanel({ status: 'error', error: error.message || String(error) });
+  }
 }
 
 async function refreshAsrModelStatus() {
@@ -4087,6 +4186,7 @@ function showSettingsPanel(panelKey) {
   });
   if (settingsEmptyPanel) settingsEmptyPanel.classList.toggle('hidden', Boolean(normalizedKey));
   if (normalizedKey === 'shortcuts') renderShortcutSettings();
+  if (normalizedKey === 'updates') void refreshUpdateStatus();
 }
 
 function clearSettingsPanel() {
@@ -7671,6 +7771,7 @@ function clean(value) {
 async function startApp() {
   await applyAppIcon();
   await applyAppVersion();
+  void refreshUpdateStatus();
   void refreshAsrModelStatus();
   void refreshAudioInputDevices();
   if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {

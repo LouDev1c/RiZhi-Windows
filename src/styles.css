@@ -1561,9 +1561,52 @@ h2 {
 
 .settings-tags-panel,
 .settings-task-categories-panel,
-.settings-shortcuts-panel {
+.settings-shortcuts-panel,
+.settings-updates-panel {
   width: min(100%, 880px);
   overflow-x: hidden;
+}
+
+.update-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 96px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.update-settings-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.update-settings-row strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.update-check-status {
+  margin: 8px 0 0;
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.update-check-status.is-error {
+  color: var(--danger);
+}
+
+.update-settings-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .shortcut-settings-list {
@@ -3841,6 +3884,11 @@ h2 {
 
   .shortcut-settings-row {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .update-settings-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .shortcut-setting-actions {

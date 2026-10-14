@@ -249,6 +249,7 @@
               <p class="muted">选择左侧项目后，在右侧查看和修改具体设置。</p>
               <div class="settings-menu">
                 <button class="settings-menu-item" type="button" data-settings-panel="data">数据文件</button>
+                <button class="settings-menu-item" type="button" data-settings-panel="updates">版本更新</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="danger">数据删除</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="task-categories">任务分类</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="tags">标签</button>
@@ -311,6 +312,22 @@
                         <button id="openModelDirectoryButton" class="secondary-button" type="button">打开</button>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel settings-updates-panel hidden" data-settings-panel="updates">
+                <h2>版本更新</h2>
+                <p class="muted">检查是否有可安装的新版本。升级只会替换程序文件，不会删除本地记录。</p>
+                <div class="update-settings-row">
+                  <div>
+                    <span class="update-settings-label">当前版本</span>
+                    <strong id="updateCurrentVersion">版本 --</strong>
+                    <p id="updateCheckStatus" class="update-check-status" role="status">尚未检查更新。</p>
+                  </div>
+                  <div class="update-settings-actions">
+                    <button id="checkForUpdatesButton" class="secondary-button" type="button">查看版本更新</button>
+                    <button id="downloadUpdateButton" class="secondary-button hidden" type="button">升级至新版本</button>
                   </div>
                 </div>
               </section>

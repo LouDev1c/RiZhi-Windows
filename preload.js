@@ -10,6 +10,12 @@ function subscribeToAsrEvent(channel, listener) {
 contextBridge.exposeInMainWorld('whbr', {
   getAppIconUrl: () => ipcRenderer.invoke('app:getIconUrl'),
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  updates: {
+    getStatus: () => ipcRenderer.invoke('app:getUpdateStatus'),
+    check: () => ipcRenderer.invoke('app:checkForUpdates'),
+    download: () => ipcRenderer.invoke('app:downloadUpdate'),
+    onStatus: (listener) => subscribeToAsrEvent('app:update-status', listener)
+  },
   getSystemTime: () => ipcRenderer.invoke('system:getTime'),
   updateFloatingTask: (payload) => ipcRenderer.send('floating-task:update', payload),
   parseTaskText: (text, referenceDate, taskCategories = []) => ipcRenderer.invoke('task:parseText', { text, referenceDate, taskCategories }),
