@@ -15,6 +15,7 @@ pnpm-debug.log*
 
 # Electron / build outputs
 dist/
+build/
 out/
 release/
 
