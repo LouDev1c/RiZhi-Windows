@@ -477,7 +477,7 @@ const tutorialSteps = [
     settingPanel: 'shortcuts',
     targetSelector: '.settings-shortcuts-panel',
     title: '快捷键',
-    text: '点击“自定义”后按下组合键，即可为列出的操作设置应用内快捷键。定位快捷键默认是 Ctrl+Alt+C。'
+    text: '带有“自定义”的操作可以设置组合键，定位快捷键默认是 Ctrl+Alt+C。复制、粘贴、剪切等常用编辑快捷键会固定保留。'
   },
   {
     page: 'settings',

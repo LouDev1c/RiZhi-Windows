@@ -1682,6 +1682,60 @@ h2 {
   color: var(--accent-dark);
 }
 
+.fixed-shortcut-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.fixed-shortcut-section h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.fixed-shortcut-section > p {
+  margin: 5px 0 12px;
+  font-size: 13px;
+}
+
+.fixed-shortcut-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fixed-shortcut-item {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.fixed-shortcut-item kbd {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid #cfd5dc;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #f8fafb;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .settings-shortcuts-panel .form-feedback {
   margin: 12px 0 0;
   color: var(--accent-dark);
@@ -3894,6 +3948,10 @@ h2 {
   .shortcut-setting-actions {
     grid-column: 1 / -1;
     justify-content: flex-end;
+  }
+
+  .fixed-shortcut-list {
+    grid-template-columns: 1fr;
   }
 
   .task-category-header-actions {

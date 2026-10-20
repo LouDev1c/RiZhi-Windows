@@ -386,7 +386,7 @@
 
               <section class="panel settings-shortcuts-panel hidden" data-settings-panel="shortcuts">
                 <h2>快捷键</h2>
-                <p class="muted">快捷键仅在日织处于前台时生效。点击“自定义”后，按下带 Ctrl、Alt 或 Shift 的组合键即可保存。</p>
+                <p class="muted">快捷键仅在日织处于前台时生效。带有“自定义”的操作可以设置组合键；常用编辑快捷键按系统习惯固定保留。</p>
                 <div class="shortcut-settings-list">
                   <article class="shortcut-settings-row">
                     <div class="shortcut-setting-description">
@@ -403,6 +403,19 @@
                     </div>
                   </article>
                 </div>
+                <section class="fixed-shortcut-section" aria-labelledby="fixedShortcutTitle">
+                  <h3 id="fixedShortcutTitle">固定快捷键</h3>
+                  <p class="muted">这些常用操作不能修改。</p>
+                  <div class="fixed-shortcut-list">
+                    <div class="fixed-shortcut-item"><span>复制</span><kbd>Ctrl+C</kbd></div>
+                    <div class="fixed-shortcut-item"><span>粘贴</span><kbd>Ctrl+V</kbd></div>
+                    <div class="fixed-shortcut-item"><span>剪切</span><kbd>Ctrl+X</kbd></div>
+                    <div class="fixed-shortcut-item"><span>全选</span><kbd>Ctrl+A</kbd></div>
+                    <div class="fixed-shortcut-item"><span>保存记录</span><kbd>Ctrl+S</kbd></div>
+                    <div class="fixed-shortcut-item"><span>撤销删除任务</span><kbd>Ctrl+Z</kbd></div>
+                    <div class="fixed-shortcut-item"><span>重做删除任务</span><kbd>Ctrl+Y</kbd></div>
+                  </div>
+                </section>
                 <p id="shortcutSettingsStatus" class="form-feedback hidden" role="status"></p>
               </section>
 

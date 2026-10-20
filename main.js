@@ -270,7 +270,7 @@ function formatVersionLabel(version) {
 }
 
 app.whenReady().then(() => {
-  createApplicationMenu();
+  Menu.setApplicationMenu(null);
   createWindow();
   showFloatingTaskWindow();
   createTray();
@@ -281,57 +281,6 @@ app.whenReady().then(() => {
     showMainWindow();
   });
 });
-
-function createApplicationMenu() {
-  const sendHistoryEvent = (action) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send(`history:${action}`);
-  };
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {
-      label: 'File',
-      submenu: [
-        { role: 'close', label: 'Close' },
-        { type: 'separator' },
-        { role: 'quit', label: 'Exit' }
-      ]
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { label: 'Undo', accelerator: 'CommandOrControl+Z', click: () => sendHistoryEvent('undo') },
-        { label: 'Redo', accelerator: 'CommandOrControl+Y', click: () => sendHistoryEvent('redo') },
-        { type: 'separator' },
-        { role: 'cut', label: 'Cut' },
-        { role: 'copy', label: 'Copy' },
-        { role: 'paste', label: 'Paste' },
-        { role: 'selectAll', label: 'Select All' }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload', label: 'Reload' },
-        { role: 'forceReload', label: 'Force Reload' },
-        { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
-        { type: 'separator' },
-        { role: 'resetZoom', label: 'Actual Size' },
-        { role: 'zoomIn', label: 'Zoom In' },
-        { role: 'zoomOut', label: 'Zoom Out' },
-        { type: 'separator' },
-        { role: 'togglefullscreen', label: 'Toggle Full Screen' }
-      ]
-    },
-    {
-      label: 'Window',
-      submenu: [
-        { role: 'minimize', label: 'Minimize' },
-        { role: 'close', label: 'Close' }
-      ]
-    }
-  ]));
-}
 
 app.on('window-all-closed', () => {
   if (isQuitting && process.platform !== 'darwin') app.quit();
