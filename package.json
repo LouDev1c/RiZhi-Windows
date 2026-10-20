@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/LouDev1c/rizhi-pc.git"
+    "url": "https://github.com/LouDev1c/RiZhi-Windows.git"
   },
   "scripts": {
     "start": "electron .",
@@ -29,7 +29,7 @@
       {
         "provider": "github",
         "owner": "LouDev1c",
-        "repo": "rizhi-pc"
+        "repo": "RiZhi-Windows"
       }
     ],
     "files": [

@@ -7,13 +7,15 @@
   <p>把每日安排、生活记录与周期回顾，安静地编织在一起。</p>
 
   <p>
-    <a href="https://github.com/LouDev1c/rizhi-pc/releases"><img src="https://img.shields.io/github/v/release/LouDev1c/rizhi-pc?style=flat-square&label=Release" alt="最新版本" /></a>
+    <a href="https://github.com/LouDev1c/RiZhi-Windows/releases"><img src="https://img.shields.io/github/v/release/LouDev1c/RiZhi-Windows?style=flat-square&label=Release" alt="最新版本" /></a>
+    <a href="https://rizhi-7jb.pages.dev"><img src="https://img.shields.io/badge/官网-下载日织-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="日织官网" /></a>
     <img src="https://img.shields.io/badge/平台-Windows%2010%20%7C%2011-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Windows 10 和 Windows 11" />
     <img src="https://img.shields.io/badge/数据-本地优先-2F8F67?style=flat-square" alt="本地优先" />
     <img src="https://img.shields.io/badge/许可证-MIT-59636E?style=flat-square" alt="MIT 许可证" />
   </p>
 
   <p>
+    <a href="https://rizhi-7jb.pages.dev">官网</a> ·
     <a href="#安装与更新">安装</a> ·
     <a href="#核心能力">功能</a> ·
     <a href="#本地存储">数据存储</a> ·
@@ -29,6 +31,8 @@
 
 任务、记录、标签、模板和附件默认保存在本机。除检查 GitHub Releases 更新、首次下载离线语音模型以及同一局域网内的手机附件上传外，日常使用不需要把个人记录发送到外部服务。
 
+> 当前发布版本：**1.0.0**。请优先从 [日织官网](https://rizhi-7jb.pages.dev) 下载 Windows 安装包；也可从 [GitHub Releases](https://github.com/LouDev1c/RiZhi-Windows/releases) 获取版本说明与发布文件。
+
 ## 核心能力
 
 | 模块 | 能力 |
@@ -41,8 +45,8 @@
 
 ## 安装与更新
 
-1. 前往 [GitHub Releases](https://github.com/LouDev1c/rizhi-pc/releases)。
-2. 打开标记为 **Latest** 的版本，下载安装程序并按提示完成安装。
+1. 前往 [日织官网](https://rizhi-7jb.pages.dev)，点击“下载 Windows 版”。
+2. 浏览器下载完成后，运行安装程序并按提示完成安装；也可从 [GitHub Releases](https://github.com/LouDev1c/RiZhi-Windows/releases) 获取安装包。
 3. 发布新版本后，旧版本启动时会询问是否更新。选择更新会下载并安装新版本，不会清理已有的本地数据。
 
 正常卸载软件时，卸载程序会询问是否同时删除个人数据；自动更新不会弹出该询问。
