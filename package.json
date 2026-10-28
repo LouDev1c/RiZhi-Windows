@@ -1,6 +1,6 @@
 {
   "name": "rizhi",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "日织 - 本地日程与生活记录桌面客户端",
   "main": "main.js",
   "author": "",
@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check floatingTaskPreload.js && node --check src/renderer.js && node --check src/floating-task.js && node --check src/asr/asrModelConfig.js && node --check src/asr/modelManager.js && node --check src/asr/modelLocation.js && node --check src/asr/asrService.js && node --check src/asr/asrWorker.js && node --check src/shared/dateUtils.js && node --check src/shared/taskTimeUtils.js && node --check src/shared/journalTags.js && node --check src/shared/taskCategories.js && node --check src/parsers/scheduleParser.js && node --check src/parsers/textScheduleParser.js && node --check src/parsers/taskTextParser.js && node --check src/parsers/textUtils.js && node --check src/storage/localDataStore.js && node --check tests/localDataStore.test.js && node --check tests/taskCategories.test.js && node tests/taskTextParser.test.js && node tests/taskCategories.test.js && node tests/localDataStore.test.js && node tests/asrModelManager.test.js",
+    "check": "node --check main.js && node --check preload.js && node --check floatingTaskPreload.js && node --check src/renderer.js && node --check src/floating-task.js && node --check src/ai/contracts.js && node --check src/ai/index.js && node --check src/asr/asrModelConfig.js && node --check src/asr/modelManager.js && node --check src/asr/modelLocation.js && node --check src/asr/asrService.js && node --check src/asr/asrWorker.js && node --check src/shared/dateUtils.js && node --check src/shared/taskTimeUtils.js && node --check src/shared/dailyCycle.js && node --check src/shared/autoPlanning.js && node --check src/shared/journalTags.js && node --check src/shared/taskCategories.js && node --check src/parsers/scheduleParser.js && node --check src/parsers/dailyPlanImportParser.js && node --check src/parsers/textScheduleParser.js && node --check src/parsers/taskTextParser.js && node --check src/parsers/textUtils.js && node --check src/storage/localDataStore.js && node --check tests/aiContracts.test.js && node --check tests/autoPlanning.test.js && node --check tests/dailyCycle.test.js && node --check tests/dailyPlanImportParser.test.js && node --check tests/localDataStore.test.js && node --check tests/taskCategories.test.js && node tests/aiContracts.test.js && node tests/autoPlanning.test.js && node tests/dailyCycle.test.js && node tests/dailyPlanImportParser.test.js && node tests/taskTextParser.test.js && node tests/taskCategories.test.js && node tests/localDataStore.test.js && node tests/asrModelManager.test.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --win nsis",
     "release": "electron-builder --win nsis --publish always"

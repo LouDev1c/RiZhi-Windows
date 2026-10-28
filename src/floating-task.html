@@ -7,12 +7,11 @@
     <link rel="stylesheet" href="./floating-task.css" />
   </head>
   <body>
-    <main id="bubble" class="task-bubble" title="按住任意空白处拖动">
-      <button id="dockRevealButton" class="dock-reveal-button" type="button" aria-label="展开悬浮任务气泡" title="点击展开"></button>
+    <main id="bubble" class="task-bubble" title="停留 3 秒后可拖动调整位置">
       <div class="bubble-header">
         <span id="stateDot" class="state-dot" aria-hidden="true"></span>
         <span id="stateText">当前进行中</span>
-        <button id="topmostButton" class="topmost-button" type="button" aria-pressed="true" title="取消置顶">置顶</button>
+        <span id="interactionHint" class="interaction-hint" aria-live="polite">停留 3 秒以调整位置</span>
       </div>
       <div class="task-summary">
         <div class="task-info">

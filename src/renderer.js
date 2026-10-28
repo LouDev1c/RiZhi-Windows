@@ -31,14 +31,31 @@ const {
   formatClockDisplay,
   formatClockDigits,
   formatTimeRangeInput,
-  inputRangeToComparableIntervals,
+  inputRangeToStartDayInterval,
   isAllDayRange,
   isValidClockPart,
   normalizeTime,
   rangesOverlap,
-  rangeToComparableIntervals,
+  rangeToStartDayInterval,
   timeToMinutes
 } = globalThis.RizhiTaskTimeUtils;
+const {
+  AUTO_AFTER_END_STATUS_POLICY,
+  START_DATE_TIME_MODEL,
+  classifyTaskAt: classifyTaskAtInstant,
+  inferredTaskStatus,
+  isContinuousTaskModel,
+  taskInterval
+} = globalThis.RizhiDailyCycle;
+const {
+  DEFAULT_GENERATION_TIME,
+  WEEKDAY_KEYS,
+  datesDueForGeneration,
+  normalizeAutoPlanning,
+  normalizeGenerationTime,
+  pruneGeneratedDates,
+  templateIdForDate
+} = globalThis.RizhiAutoPlanning;
 const {
   DEFAULT_JOURNAL_TAGS,
   legacyRatingToTagId,
@@ -54,27 +71,43 @@ const emptyState = document.querySelector('#emptyState');
 const taskWorkspace = document.querySelector('#taskWorkspace');
 const taskList = document.querySelector('#taskList');
 const taskDurationSummary = document.querySelector('#taskDurationSummary');
+const taskToolbarButtonStack = document.querySelector('#taskToolbarButtonStack');
+const taskViewToggleButton = document.querySelector('#taskViewToggleButton');
 const statusBox = document.querySelector('#statusBox');
-const manualTaskButton = document.querySelector('#manualTaskButton');
-const importFileButton = document.querySelector('#importFileButton');
 const backToCurrentTaskButton = document.querySelector('#backToCurrentTaskButton');
 const contextualNowButtonLabel = document.querySelector('#contextualNowButtonLabel');
-const saveTaskTemplateButton = document.querySelector('#saveTaskTemplateButton');
+const createTaskToolbarButton = document.querySelector('#createTaskToolbarButton');
+const templateMenuModal = document.querySelector('#templateMenuModal');
+const createTaskWorkbenchCard = templateMenuModal && templateMenuModal.querySelector('.modal-card');
+const closeTemplateMenuModalButton = document.querySelector('#closeTemplateMenuModalButton');
+const reuseTemplateFromMenuButton = document.querySelector('#reuseTemplateFromMenuButton');
+const createTasksManualButton = document.querySelector('#createTasksManualButton');
+const createTaskDetailPanel = document.querySelector('#createTaskDetailPanel');
+const createTaskPlaceholder = document.querySelector('#createTaskPlaceholder');
+const createTaskActionButtons = Array.from(document.querySelectorAll('[data-create-task-view]'));
+const autoPlanningEnabled = document.querySelector('#autoPlanningEnabled');
+const autoPlanningGenerationTime = document.querySelector('#autoPlanningGenerationTime');
+const autoPlanningWeekdayGrid = document.querySelector('#autoPlanningWeekdayGrid');
+const autoPlanningStatus = document.querySelector('#autoPlanningStatus');
+const saveAutoPlanningButton = document.querySelector('#saveAutoPlanningButton');
 const saveTaskTemplateModal = document.querySelector('#saveTaskTemplateModal');
+const saveTaskTemplateCard = saveTaskTemplateModal && saveTaskTemplateModal.querySelector('.modal-card');
 const closeSaveTaskTemplateModalButton = document.querySelector('#closeSaveTaskTemplateModalButton');
 const cancelSaveTaskTemplateButton = document.querySelector('#cancelSaveTaskTemplateButton');
 const saveTaskTemplateForm = document.querySelector('#saveTaskTemplateForm');
 const taskTemplateName = document.querySelector('#taskTemplateName');
 const taskTemplateSaveSummary = document.querySelector('#taskTemplateSaveSummary');
 const taskTemplateSaveError = document.querySelector('#taskTemplateSaveError');
-const reuseTemplateButton = document.querySelector('#reuseTemplateButton');
 const reuseTemplateModal = document.querySelector('#reuseTemplateModal');
+const reuseTemplateCard = reuseTemplateModal && reuseTemplateModal.querySelector('.modal-card');
 const closeReuseTemplateModalButton = document.querySelector('#closeReuseTemplateModalButton');
 const cancelReuseTemplateButton = document.querySelector('#cancelReuseTemplateButton');
 const confirmReuseTemplateButton = document.querySelector('#confirmReuseTemplateButton');
+const reuseTemplateTitle = document.querySelector('#reuseTemplateTitle');
+const reuseTemplateIntro = document.querySelector('#reuseTemplateIntro');
 const taskTemplateList = document.querySelector('#taskTemplateList');
 const taskTemplateEmpty = document.querySelector('#taskTemplateEmpty');
-const importMoreButton = document.querySelector('#importMoreButton');
+const createTaskTemplateButton = document.querySelector('#createTaskTemplateButton');
 const taskDateFilter = document.querySelector('#taskDateFilter');
 const taskTimePicker = document.querySelector('#taskTimePicker');
 const taskTimePickerTitle = document.querySelector('#taskTimePickerTitle');
@@ -185,11 +218,8 @@ const profileStatsSummary = document.querySelector('#profileStatsSummary');
 const profileStatsRangeText = document.querySelector('#profileStatsRangeText');
 const profileStatsPie = document.querySelector('#profileStatsPie');
 const profileStatsDaily = document.querySelector('#profileStatsDaily');
-const importChoiceModal = document.querySelector('#importChoiceModal');
-const closeImportChoiceModalButton = document.querySelector('#closeImportChoiceModalButton');
 const manualScheduleButton = document.querySelector('#manualScheduleButton');
 const fileScheduleButton = document.querySelector('#fileScheduleButton');
-const manualDailyPlanButton = document.querySelector('#manualDailyPlanButton');
 const scheduleTableModal = document.querySelector('#scheduleTableModal');
 const closeScheduleTableModalButton = document.querySelector('#closeScheduleTableModalButton');
 const termStartDate = document.querySelector('#termStartDate');
@@ -201,12 +231,25 @@ const saveScheduleTableButton = document.querySelector('#saveScheduleTableButton
 const dailyPlanTableModal = document.querySelector('#dailyPlanTableModal');
 const dailyPlanModalCard = dailyPlanTableModal && dailyPlanTableModal.querySelector('.daily-plan-modal-card');
 const dailyPlanLaunchPanel = document.querySelector('#dailyPlanLaunchPanel');
+const dailyPlanTableTitle = document.querySelector('#dailyPlanTableTitle');
+const dailyPlanTableIntro = document.querySelector('#dailyPlanTableIntro');
+const dailyPlanDateToolbar = document.querySelector('#dailyPlanDateToolbar');
 const dailyPlanVoicePage = document.querySelector('#dailyPlanVoicePage');
 const openDailyPlanVoicePageButton = document.querySelector('#openDailyPlanVoicePageButton');
+const dailyPlanImportTemplateButton = document.querySelector('#dailyPlanImportTemplateButton');
+const dailyPlanImportButton = document.querySelector('#dailyPlanImportButton');
+const dailyPlanImportNotice = document.querySelector('#dailyPlanImportNotice');
 const backDailyPlanVoicePageButton = document.querySelector('#backDailyPlanVoicePageButton');
 const closeDailyPlanVoicePageButton = document.querySelector('#closeDailyPlanVoicePageButton');
-const dailyPlanMultiDay = document.querySelector('#dailyPlanMultiDay');
+const dailyPlanScopeControl = document.querySelector('#dailyPlanScopeControl');
+const dailyPlanSpecificDateButton = document.querySelector('#dailyPlanSpecificDateButton');
+const dailyPlanWeekdayButton = document.querySelector('#dailyPlanWeekdayButton');
 const dailyPlanSingleDateRow = document.querySelector('#dailyPlanSingleDateRow');
+const dailyPlanWeekdayPanel = document.querySelector('#dailyPlanWeekdayPanel');
+const dailyPlanWeekdayOptions = document.querySelector('#dailyPlanWeekdayOptions');
+const dailyPlanWeekdayButtons = Array.from(document.querySelectorAll('.daily-plan-weekday-option'));
+const dailyPlanWeekPeriodField = document.querySelector('#dailyPlanWeekPeriodField');
+const dailyPlanWeekPeriod = document.querySelector('#dailyPlanWeekPeriod');
 const dailyPlanRangeRow = document.querySelector('#dailyPlanRangeRow');
 const dailyPlanDate = document.querySelector('#dailyPlanDate');
 const dailyPlanStartDate = document.querySelector('#dailyPlanStartDate');
@@ -214,6 +257,8 @@ const dailyPlanEndDate = document.querySelector('#dailyPlanEndDate');
 const dailyPlanTableBody = document.querySelector('#dailyPlanTableBody');
 const addDailyPlanRowButton = document.querySelector('#addDailyPlanRowButton');
 const cancelDailyPlanTableButton = document.querySelector('#cancelDailyPlanTableButton');
+const dailyPlanValidationMessage = document.querySelector('#dailyPlanValidationMessage');
+const saveDailyPlanAsTemplateButton = document.querySelector('#saveDailyPlanAsTemplateButton');
 const saveDailyPlanTableButton = document.querySelector('#saveDailyPlanTableButton');
 const dailyPlanVoiceStartButton = document.querySelector('#dailyPlanVoiceStartButton');
 const dailyPlanVoiceCancelButton = document.querySelector('#dailyPlanVoiceCancelButton');
@@ -283,6 +328,9 @@ let editingTaskTemplateId = '';
 let pendingTaskCategoryDeleteId = '';
 const taskCategoryColorSaveTimers = new Map();
 let activeMediaAnnotationEditor = null;
+let activeMediaAnnotationCommit = null;
+let activeMediaAnnotationDirty = false;
+let journalMediaManageIdentity = '';
 let highlightedTaskId = '';
 let currentEffectiveNow = new Date();
 let activeTaskTimePicker = null;
@@ -309,6 +357,9 @@ let asrTestRecording = false;
 let asrModelDownloadInFlight = false;
 let latestAsrModelStatus = null;
 let latestUpdateStatus = { status: 'idle', version: '', progress: null, error: '' };
+let taskViewMode = 'focus';
+let autoPlanningInFlight = false;
+let lastAutoPlanningMinuteKey = '';
 let microphoneTestCapture = null;
 let microphoneTestUnsubscribe = null;
 let microphoneTestRecording = false;
@@ -370,6 +421,19 @@ let dailyPlanVoiceDecodedSeconds = 0;
 let dailyPlanVoiceDecodeRealtimeFactor = 0;
 let dailyPlanVoiceParsedCandidates = [];
 let dailyPlanVoiceParsedText = '';
+let dailyPlanPurpose = 'tasks';
+let dailyPlanRangeMode = 'date';
+let dailyPlanCustomRangeInitialized = false;
+let pendingTaskTemplateItems = null;
+let pendingTaskTemplateWeekdays = [];
+let embeddedCreateTaskCard = null;
+let dailyPlanEmbedded = false;
+let saveTaskTemplateEmbedded = false;
+let saveTaskTemplateReturnContext = null;
+let saveTaskTemplateSourceView = 'templates';
+let reuseTemplateEmbedded = false;
+let reuseTemplateMode = 'manage';
+const createTaskCardParents = new Map();
 const activePlanningDates = new Set();
 const dateInputControllers = new WeakMap();
 const taskUndoStack = [];
@@ -379,15 +443,9 @@ const MISSED_REMINDER_BACKLOG_LIMIT_MINUTES = 2;
 const tutorialSteps = [
   {
     page: 'tasks',
-    targetSelector: '#importMoreButton',
-    title: '批量创建任务',
-    text: '这里可以手动填写或导入课表、复用安排模板，也可以为单日或连续多日填写每日安排。每日安排还支持使用本地语音识别批量生成任务。'
-  },
-  {
-    page: 'tasks',
-    targetSelector: '#saveTaskTemplateButton',
-    title: '保存安排模板',
-    text: '将当前日期的完整安排保存为模板后，可以在“批量创建任务”中复用。模板只保存时间段、任务名称和任务分类，不会带入完成记录。'
+    targetSelector: '#createTaskToolbarButton',
+    title: '创建任务',
+    text: '“任务模板”可以直接为当前日期创建任务；需要调整内容、详情或日期时，可在“编排任务”中导入模板后再创建。编排表也支持手动填写、文件导入、语音输入和保存模板。'
   },
   {
     page: 'tasks',
@@ -514,6 +572,8 @@ navItems.forEach((item) => {
 settingsMenuButtons.forEach((button) => {
   button.addEventListener('click', () => showSettingsPanel(button.dataset.settingsPanel));
 });
+if (taskViewToggleButton) taskViewToggleButton.addEventListener('click', toggleTaskViewMode);
+if (saveAutoPlanningButton) saveAutoPlanningButton.addEventListener('click', () => void saveAutoPlanningSettings());
 
 if (asrTestStartButton) asrTestStartButton.addEventListener('click', startRecording);
 if (asrTestStopButton) asrTestStopButton.addEventListener('click', stopRecording);
@@ -578,6 +638,7 @@ document.addEventListener('keydown', handleShortcutCapture, true);
 document.addEventListener('keydown', handleConfiguredShortcut, true);
 document.addEventListener('keydown', handleTaskHistoryShortcut);
 taskList.addEventListener('scroll', positionTaskTimePicker);
+if (createTaskDetailPanel) createTaskDetailPanel.addEventListener('scroll', positionTaskTimePicker);
 cancelTaskTimePickerButton.addEventListener('click', closeTaskTimePicker);
 confirmTaskTimePickerButton.addEventListener('click', () => void confirmTaskTimePicker());
 [taskTimePickerHour, taskTimePickerMinute].forEach((input) => {
@@ -595,12 +656,13 @@ if (window.whbr.onHistoryUndo) window.whbr.onHistoryUndo(handleTaskHistoryUndo);
 if (window.whbr.onHistoryRedo) window.whbr.onHistoryRedo(handleTaskHistoryRedo);
 
 backToCurrentTaskButton.addEventListener('click', () => void goToContextualNow());
-if (manualTaskButton) manualTaskButton.addEventListener('click', openImportChoiceModal);
-if (saveTaskTemplateButton) saveTaskTemplateButton.addEventListener('click', openSaveTaskTemplateModal);
-if (reuseTemplateButton) reuseTemplateButton.addEventListener('click', openReuseTemplateModal);
-if (importFileButton) importFileButton.addEventListener('click', openImportChoiceModal);
-importMoreButton.addEventListener('click', openImportChoiceModal);
+if (createTaskToolbarButton) createTaskToolbarButton.addEventListener('click', openTemplateMenuModal);
 window.addEventListener('keydown', (event) => {
+  if (isSaveShortcut(event) && activeMediaAnnotationCommit && mediaViewModal && !mediaViewModal.classList.contains('hidden')) {
+    event.preventDefault();
+    void activeMediaAnnotationCommit();
+    return;
+  }
   if (isSaveShortcut(event) && canSaveJournalWithShortcut()) {
     event.preventDefault();
     saveSelectedJournal();
@@ -613,14 +675,17 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !taskEditModal.classList.contains('hidden')) {
     closeTaskEditModal();
   }
-  if (event.key === 'Escape' && !importChoiceModal.classList.contains('hidden')) {
-    closeImportChoiceModal();
-  }
   if (event.key === 'Escape' && saveTaskTemplateModal && !saveTaskTemplateModal.classList.contains('hidden')) {
     closeSaveTaskTemplateModal();
+    return;
   }
   if (event.key === 'Escape' && reuseTemplateModal && !reuseTemplateModal.classList.contains('hidden')) {
     closeReuseTemplateModal();
+    return;
+  }
+  if (event.key === 'Escape' && templateMenuModal && !templateMenuModal.classList.contains('hidden')) {
+    closeTemplateMenuModal();
+    return;
   }
   if (event.key === 'Escape' && !scheduleTableModal.classList.contains('hidden')) {
     closeScheduleTableModal();
@@ -655,7 +720,7 @@ function canSaveJournalWithShortcut() {
   return [
     resetModal,
     taskEditModal,
-    importChoiceModal,
+    templateMenuModal,
     saveTaskTemplateModal,
     reuseTemplateModal,
     scheduleTableModal,
@@ -668,14 +733,6 @@ function canSaveJournalWithShortcut() {
   ].every((modal) => modal.classList.contains('hidden'));
 }
 
-if (importFileButton) {
-  importFileButton.addEventListener('dragover', handleDragOver);
-  importFileButton.addEventListener('dragleave', handleDragLeave);
-  importFileButton.addEventListener('drop', handleDrop);
-}
-importMoreButton.addEventListener('dragover', handleDragOver);
-importMoreButton.addEventListener('dragleave', handleDragLeave);
-importMoreButton.addEventListener('drop', handleDrop);
 registerDateInput(taskDateFilter, { onCommit: renderTasks });
 registerDateInput(profileStatsStartDate, {
   onCommit: (date) => {
@@ -770,9 +827,32 @@ if (saveTaskTemplateModal) {
     if (event.target === saveTaskTemplateModal) closeSaveTaskTemplateModal();
   });
 }
+if (closeTemplateMenuModalButton) closeTemplateMenuModalButton.addEventListener('click', closeTemplateMenuModal);
+if (createTasksManualButton) {
+  createTasksManualButton.addEventListener('click', () => {
+    openDailyPlanTableModal({ purpose: 'tasks', embedded: true, view: 'compose' });
+  });
+}
+if (reuseTemplateFromMenuButton) {
+  reuseTemplateFromMenuButton.addEventListener('click', () => {
+    openReuseTemplateModal({ embedded: true });
+  });
+}
+if (templateMenuModal) {
+  templateMenuModal.addEventListener('click', (event) => {
+    if (event.target === templateMenuModal) closeTemplateMenuModal();
+  });
+}
 if (closeReuseTemplateModalButton) closeReuseTemplateModalButton.addEventListener('click', closeReuseTemplateModal);
 if (cancelReuseTemplateButton) cancelReuseTemplateButton.addEventListener('click', closeReuseTemplateModal);
-if (confirmReuseTemplateButton) confirmReuseTemplateButton.addEventListener('click', confirmReuseTemplate);
+if (confirmReuseTemplateButton) confirmReuseTemplateButton.addEventListener('click', confirmTaskTemplateSelection);
+if (createTaskTemplateButton) {
+  createTaskTemplateButton.addEventListener('click', () => {
+    const embedded = reuseTemplateEmbedded;
+    closeReuseTemplateModal();
+    openDailyPlanTableModal({ purpose: 'template', embedded, view: 'templates' });
+  });
+}
 if (reuseTemplateModal) {
   reuseTemplateModal.addEventListener('click', (event) => {
     if (event.target === reuseTemplateModal) closeReuseTemplateModal();
@@ -784,13 +864,8 @@ cancelTaskEditButton.addEventListener('click', closeTaskEditModal);
 taskEditModal.addEventListener('click', (event) => {
   if (event.target === taskEditModal) closeTaskEditModal();
 });
-closeImportChoiceModalButton.addEventListener('click', closeImportChoiceModal);
-manualScheduleButton.addEventListener('click', () => openScheduleTableModal());
-fileScheduleButton.addEventListener('click', importScheduleFile);
-manualDailyPlanButton.addEventListener('click', openDailyPlanTableModal);
-importChoiceModal.addEventListener('click', (event) => {
-  if (event.target === importChoiceModal) closeImportChoiceModal();
-});
+if (manualScheduleButton) manualScheduleButton.addEventListener('click', () => openScheduleTableModal());
+if (fileScheduleButton) fileScheduleButton.addEventListener('click', importScheduleFile);
 closeScheduleTableModalButton.addEventListener('click', closeScheduleTableModal);
 cancelScheduleTableButton.addEventListener('click', closeScheduleTableModal);
 addScheduleRowButton.addEventListener('click', () => addScheduleTableRow());
@@ -800,6 +875,12 @@ scheduleTableModal.addEventListener('click', (event) => {
 });
 if (closeDailyPlanVoicePageButton) closeDailyPlanVoicePageButton.addEventListener('click', closeDailyPlanTableModal);
 if (openDailyPlanVoicePageButton) openDailyPlanVoicePageButton.addEventListener('click', openDailyPlanVoicePage);
+if (dailyPlanImportTemplateButton) {
+  dailyPlanImportTemplateButton.addEventListener('click', () => openReuseTemplateModal({ mode: 'import' }));
+}
+if (dailyPlanImportButton) {
+  dailyPlanImportButton.addEventListener('click', () => void importDailyPlanFile());
+}
 if (backDailyPlanVoicePageButton) backDailyPlanVoicePageButton.addEventListener('click', closeDailyPlanVoicePage);
 cancelDailyPlanTableButton.addEventListener('click', closeDailyPlanTableModal);
 addDailyPlanRowButton.addEventListener('click', () => {
@@ -807,12 +888,18 @@ addDailyPlanRowButton.addEventListener('click', () => {
   focusDailyPlanGridCell(dailyPlanTableBody.querySelectorAll('tr').length - 1, 0);
 });
 saveDailyPlanTableButton.addEventListener('click', saveDailyPlanTable);
+if (saveDailyPlanAsTemplateButton) {
+  saveDailyPlanAsTemplateButton.addEventListener('click', () => void saveDailyPlanTable({ asTemplate: true }));
+}
 if (dailyPlanVoiceStartButton) dailyPlanVoiceStartButton.addEventListener('click', toggleDailyPlanVoiceInput);
 if (dailyPlanVoiceCancelButton) dailyPlanVoiceCancelButton.addEventListener('click', cancelDailyPlanVoiceInput);
 if (dailyPlanVoiceConfirmButton) dailyPlanVoiceConfirmButton.addEventListener('click', confirmDailyPlanVoiceText);
 if (dailyPlanVoiceApplyButton) dailyPlanVoiceApplyButton.addEventListener('click', applyDailyPlanVoiceTasks);
 if (dailyPlanVoiceText) dailyPlanVoiceText.addEventListener('input', invalidateDailyPlanVoiceParse);
-if (dailyPlanMultiDay) dailyPlanMultiDay.addEventListener('change', handleDailyPlanDateModeChange);
+if (dailyPlanSpecificDateButton) dailyPlanSpecificDateButton.addEventListener('click', () => setDailyPlanRangeMode('date'));
+if (dailyPlanWeekdayButton) dailyPlanWeekdayButton.addEventListener('click', () => setDailyPlanRangeMode('weekday'));
+dailyPlanWeekdayButtons.forEach((button) => button.addEventListener('click', () => toggleDailyPlanWeekday(button)));
+if (dailyPlanWeekPeriod) dailyPlanWeekPeriod.addEventListener('change', handleDailyPlanWeekPeriodChange);
 if (dailyPlanStartDate) dailyPlanStartDate.addEventListener('change', constrainDailyPlanEndDate);
 if (dailyPlanEndDate) dailyPlanEndDate.addEventListener('change', constrainDailyPlanEndDate);
 dailyPlanTableModal.addEventListener('click', (event) => {
@@ -1982,6 +2069,7 @@ async function refreshSystemTime() {
   updateTaskTemporalView();
   if (pages.profile.classList.contains('active')) renderProfileStats();
   publishFloatingTask(now);
+  void maybeGenerateScheduledPlans(now);
 }
 
 function publishFloatingTask(now = currentEffectiveNow || new Date()) {
@@ -1996,7 +2084,7 @@ function publishFloatingTask(now = currentEffectiveNow || new Date()) {
   window.whbr.updateFloatingTask(activeTask ? {
     active: true,
     title: clean(activeTask.title) || '未命名任务',
-    timeRange: `${normalizeTime(activeTask.startTime)} - ${normalizeTime(activeTask.endTime)}`,
+    timeRange: `${normalizeTime(activeTask.startTime)} - ${taskCrossesMidnight(activeTask) ? '次日 ' : ''}${normalizeTime(activeTask.endTime)}`,
     details: clean(activeTask.planDetails) || clean(activeTask.details) || '暂未填写事前计划或备注',
     ...status
   } : {
@@ -2016,19 +2104,9 @@ function publishFloatingTask(now = currentEffectiveNow || new Date()) {
 }
 
 function findFloatingTask(now) {
-  const today = formatLocalDate(now);
-  const previousDate = shiftDate(today, -1);
-  const currentMinute = now.getHours() * 60 + now.getMinutes();
   return sortTasksForDisplay(tasks.filter((task) => {
     if (!isRenderableTask(task)) return false;
-    const taskDate = normalizeDate(task.date);
-    const start = timeToMinutes(task.startTime);
-    const end = timeToMinutes(task.endTime);
-    if (start === null || end === null) return false;
-    if (isAllDayRange(task.startTime, task.endTime)) return taskDate === today;
-    if (start === end) return false;
-    if (taskDate === today) return classifyTaskStage(task, now) === 'current';
-    return taskDate === previousDate && end < start && currentMinute < end;
+    return classifyTaskStage(task, now) === 'current';
   }))[0] || null;
 }
 
@@ -2065,11 +2143,9 @@ function floatingTaskStatus(task, now) {
 }
 
 function floatingTaskElapsedSeconds(task, now) {
-  const date = parseLocalDate(normalizeDate(task.date));
-  const start = timeToMinutes(task.startTime);
-  if (!date || start === null) return 0;
-  const startAt = new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(start / 60), start % 60).getTime();
-  return Math.max(0, Math.floor((now.getTime() - startAt) / 1000));
+  const interval = taskInterval(task);
+  if (!interval) return 0;
+  return Math.max(0, Math.floor((now.getTime() - interval.start.getTime()) / 1000));
 }
 
 function floatingTaskRemainingSeconds(task, now) {
@@ -2533,7 +2609,6 @@ function fallbackDateInputValue(input) {
 
 async function importScheduleFile() {
   setStatus('请选择要导入的课表文件，仅支持 xlsx、xls、csv 或 tsv。', '');
-  closeImportChoiceModal();
 
   try {
     const selectedFile = await window.whbr.selectAndParseFile({ kind: 'schedule' });
@@ -2559,10 +2634,6 @@ async function importScheduleFile() {
   } catch (error) {
     setStatus(`导入失败：${error.message}`, '');
   }
-}
-
-async function importDroppedFile(file) {
-  setStatus(`已忽略 ${file && file.name ? file.name : '拖入的文件'}。每日安排不再支持文件导入，请在“批量创建任务”中选择“填写安排内容”。`, '', 6000);
 }
 
 async function parseSelectedImportFile(file) {
@@ -2632,25 +2703,13 @@ async function handleParsedImport(result) {
   openScheduleTableModal(result.timetableTemplate || templateFromScheduleTasks(importedTasks), result);
 }
 
-function openImportChoiceModal() {
-  const hasSchedule = hasScheduleTemplate();
-  manualScheduleButton.textContent = hasSchedule ? '查看/修改课表' : '手动添加课表';
-  fileScheduleButton.textContent = hasSchedule ? '更新课表文件' : '导入课表文件';
-  importChoiceModal.classList.remove('hidden');
-}
-
 function hasScheduleTemplate() {
   const template = normalizedProfile().scheduleTemplate;
   if (template && Array.isArray(template.rows) && template.rows.length > 0) return true;
   return tasks.some((task) => task.source === 'schedule-template');
 }
 
-function closeImportChoiceModal() {
-  importChoiceModal.classList.add('hidden');
-}
-
 function openScheduleTableModal(prefillTemplate = null, importResult = null) {
-  closeImportChoiceModal();
   const template = normalizedProfile().scheduleTemplate || null;
   const hasTemplate = template && Array.isArray(template.rows) && template.rows.length > 0;
   const prefillRows = prefillTemplate && Array.isArray(prefillTemplate.rows) ? prefillTemplate.rows : [];
@@ -2792,12 +2851,14 @@ function buildTasksFromScheduleTemplate(template, dates) {
         location: '',
         typeId: category ? category.id : '',
         type: category ? category.name : '',
-        planDetails: '',
+        planDetails: item.planDetails || '',
         details: '',
         status: '未评价',
         rawText: row.timeRange,
         sheetName: '手动课表',
         source: 'schedule-template',
+        timeModel: START_DATE_TIME_MODEL,
+        statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
         order: nextOrderForDate(date) + rowIndex * 10,
         isDraft: !timeRange
       });
@@ -2883,13 +2944,42 @@ function markScheduleTimeConflicts(rows) {
   return conflictedIndexes;
 }
 
-function openDailyPlanTableModal() {
-  closeImportChoiceModal();
+function openDailyPlanTableModal(options = {}) {
+  dailyPlanPurpose = options.purpose === 'template' ? 'template' : 'tasks';
+  const shouldEmbed = options.embedded === true;
+  const dailyPlanView = clean(options.view) || (dailyPlanPurpose === 'template' ? 'templates' : 'compose');
+  if (dailyPlanTableTitle) {
+    dailyPlanTableTitle.textContent = dailyPlanPurpose === 'template'
+      ? '编排模板内容'
+      : '编排任务';
+  }
+  if (dailyPlanTableIntro) {
+    dailyPlanTableIntro.textContent = '';
+    dailyPlanTableIntro.classList.add('hidden');
+  }
+  if (dailyPlanDateToolbar) {
+    dailyPlanDateToolbar.classList.remove('hidden');
+  }
+  if (saveDailyPlanTableButton) {
+    saveDailyPlanTableButton.textContent = dailyPlanPurpose === 'template' ? '命名模板并保存' : '确定安排';
+  }
+  if (saveDailyPlanAsTemplateButton) {
+    saveDailyPlanAsTemplateButton.classList.toggle('hidden', dailyPlanPurpose === 'template');
+  }
+  if (dailyPlanImportNotice) {
+    dailyPlanImportNotice.textContent = '';
+    dailyPlanImportNotice.classList.add('hidden');
+    dailyPlanImportNotice.classList.remove('is-error');
+  }
+  clearDailyPlanValidationMessage();
   const defaultDate = taskDateFilter.value || formatLocalDate(currentEffectiveNow);
-  dailyPlanMultiDay.checked = false;
+  dailyPlanRangeMode = 'date';
+  dailyPlanCustomRangeInitialized = false;
   setDateInputValue(dailyPlanDate, defaultDate);
   setDateInputValue(dailyPlanStartDate, defaultDate);
   setDateInputValue(dailyPlanEndDate, defaultDate);
+  if (dailyPlanWeekPeriod) dailyPlanWeekPeriod.value = 'current';
+  setSelectedDailyPlanWeekdays([String(parseLocalDate(defaultDate)?.getDay() ?? 1)]);
   syncDailyPlanDateMode();
   dailyPlanTableBody.innerHTML = '';
   clearDailyPlanVoiceParsedState({ clearText: true });
@@ -2900,14 +2990,25 @@ function openDailyPlanTableModal() {
   setDailyPlanVoiceControls('idle');
   setDailyPlanVoiceStatus('尚未开始语音识别。');
   setDailyPlanVoicePageVisible(false);
-  dailyPlanTableModal.classList.remove('hidden');
+  if (shouldEmbed) {
+    mountCreateTaskCard(dailyPlanView, dailyPlanModalCard);
+    dailyPlanEmbedded = true;
+    dailyPlanTableModal.classList.add('hidden');
+  } else {
+    dailyPlanEmbedded = false;
+    dailyPlanTableModal.classList.remove('hidden');
+  }
   requestAnimationFrame(() => focusDailyPlanGridCell(0, 0));
 }
 
 function closeDailyPlanTableModal() {
+  const embedded = dailyPlanEmbedded;
   if (dailyPlanVoiceRecording) void cancelDailyPlanVoiceInput();
   setDailyPlanVoicePageVisible(false);
   dailyPlanTableModal.classList.add('hidden');
+  dailyPlanPurpose = 'tasks';
+  dailyPlanEmbedded = false;
+  if (embedded) showCreateTaskPlaceholder();
 }
 
 function openDailyPlanVoicePage() {
@@ -3283,10 +3384,7 @@ async function confirmDailyPlanVoiceText() {
 }
 
 function getDailyPlanVoiceReferenceDate() {
-  if (dailyPlanMultiDay && dailyPlanMultiDay.checked) {
-    return (dailyPlanStartDate && dailyPlanStartDate.value) || (dailyPlanDate && dailyPlanDate.value) || '';
-  }
-  return dailyPlanDate && dailyPlanDate.value;
+  return selectedDailyPlanDates()[0] || (dailyPlanDate && dailyPlanDate.value) || '';
 }
 
 function normalizeDailyPlanVoiceCandidate(task = {}) {
@@ -3387,8 +3485,8 @@ function applyDailyPlanVoiceTasks() {
   }
 
   Array.from(dailyPlanTableBody.querySelectorAll('tr')).forEach((row) => {
-    const title = clean(row.querySelector('td:nth-child(3) input')?.value);
-    const details = clean(row.querySelector('td:nth-child(4) input')?.value);
+    const title = clean(row.querySelector('.daily-plan-title-input')?.value);
+    const details = clean(row.querySelector('.daily-plan-details-input')?.value);
     if (!title && !details) row.remove();
   });
 
@@ -3402,10 +3500,75 @@ function applyDailyPlanVoiceTasks() {
   });
 
   const count = dailyPlanVoiceParsedCandidates.length;
+  clearDailyPlanValidationMessage();
   clearDailyPlanVoiceParsedState({ clearText: true });
   setDailyPlanVoiceStatus('尚未开始语音识别。');
   closeDailyPlanVoicePage();
-  setStatus(`已将 ${count} 条语音解析结果填入创建任务列表，请核对后点击“确定安排”。`, 'hidden');
+  setStatus(dailyPlanPurpose === 'template'
+    ? `已将 ${count} 条语音解析结果填入模板内容，请核对后点击“命名模板并保存”。`
+    : `已将 ${count} 条语音解析结果填入创建任务列表，请核对后点击“确定安排”。`, 'hidden');
+}
+
+async function importDailyPlanFile() {
+  if (!window.whbr?.selectDailyPlanImport) {
+    setDailyPlanImportNotice('当前版本无法调用文件导入。', true);
+    return;
+  }
+
+  const targetDate = selectedDailyPlanDates()[0] || formatLocalDate(currentEffectiveNow);
+  dailyPlanImportButton.disabled = true;
+  setDailyPlanImportNotice('正在读取并识别表格…');
+
+  try {
+    const result = await window.whbr.selectDailyPlanImport({ targetDate });
+    if (!result || result.canceled) {
+      setDailyPlanImportNotice('');
+      return;
+    }
+    if (!Array.isArray(result.candidates) || result.candidates.length === 0) {
+      setDailyPlanImportNotice(result.message || '没有识别到可导入的时间段和任务名称。', true);
+      return;
+    }
+
+    if (dailyPlanRangeMode === 'date' && result.selectedDate && result.selectedDate !== targetDate) {
+      setDateInputValue(dailyPlanDate, result.selectedDate);
+    }
+
+    Array.from(dailyPlanTableBody.querySelectorAll('tr')).forEach((row) => {
+      const title = clean(row.querySelector('.daily-plan-title-input')?.value);
+      const details = clean(row.querySelector('.daily-plan-details-input')?.value);
+      if (!title && !details) row.remove();
+    });
+
+    result.candidates.forEach((candidate) => {
+      const category = taskCategoryFromInput(candidate.category);
+      addDailyPlanRow(`${candidate.startTime}-${candidate.endTime}`, {
+        title: candidate.title,
+        planDetails: candidate.details,
+        typeId: category?.id || defaultTaskCategory()?.id || ''
+      });
+    });
+
+    clearDailyPlanValidationMessage();
+    const source = result.fileName ? `《${result.fileName}》` : '文件';
+    const nextStep = dailyPlanPurpose === 'template'
+      ? '请核对后点击“命名模板并保存”。'
+      : '请核对后点击“确定安排”。';
+    const recognitionMessage = result.message ? `${result.message} ` : '';
+    setDailyPlanImportNotice(`已从${source}预填 ${result.candidates.length} 条任务。${recognitionMessage}${nextStep}`);
+    focusDailyPlanGridCell(Math.max(0, dailyPlanTableBody.querySelectorAll('tr').length - result.candidates.length), 0);
+  } catch (error) {
+    setDailyPlanImportNotice(`导入失败：${error.message || '无法读取该文件。'}`, true);
+  } finally {
+    dailyPlanImportButton.disabled = false;
+  }
+}
+
+function setDailyPlanImportNotice(message, isError = false) {
+  if (!dailyPlanImportNotice) return;
+  dailyPlanImportNotice.textContent = message;
+  dailyPlanImportNotice.classList.toggle('hidden', !message);
+  dailyPlanImportNotice.classList.toggle('is-error', Boolean(isError && message));
 }
 
 function clearDailyPlanVoiceParsedState(options = {}) {
@@ -3420,34 +3583,91 @@ function addDailyPlanRow(timeRange = '', values = {}) {
   const startTime = clean(values.startTime) || (parsedRange && parsedRange.startTime) || '';
   const endTime = clean(values.endTime) || (parsedRange && parsedRange.endTime) || '';
 
-  const startTimeCell = document.createElement('td');
+  const timeCell = document.createElement('td');
+  timeCell.className = 'daily-plan-time-cell';
+  const timeRangeEditor = document.createElement('div');
+  timeRangeEditor.className = 'daily-plan-time-range-editor';
+  const startTimeField = document.createElement('label');
+  startTimeField.className = 'daily-plan-inline-field';
+  const startTimeLabel = document.createElement('span');
+  startTimeLabel.textContent = '开始';
   const startTimeInput = createDailyPlanClockInput(startTime, '开始时间');
-  startTimeCell.appendChild(startTimeInput);
+  startTimeInput.dataset.dailyPlanTime = 'start';
+  startTimeField.append(startTimeLabel, startTimeInput);
 
-  const endTimeCell = document.createElement('td');
+  const timeSeparator = document.createElement('span');
+  timeSeparator.className = 'daily-plan-time-separator';
+  timeSeparator.textContent = '至';
+  const endTimeField = document.createElement('label');
+  endTimeField.className = 'daily-plan-inline-field';
+  const endTimeLabel = document.createElement('span');
+  endTimeLabel.textContent = '结束';
+  const endTimeControl = document.createElement('span');
+  endTimeControl.className = 'daily-plan-end-time-control';
   const endTimeInput = createDailyPlanClockInput(endTime, '结束时间');
-  endTimeCell.appendChild(endTimeInput);
+  endTimeInput.dataset.dailyPlanTime = 'end';
+  const nextDayHint = document.createElement('span');
+  nextDayHint.className = 'daily-plan-next-day-hint hidden';
+  nextDayHint.textContent = '次日';
+  endTimeControl.append(endTimeInput, nextDayHint);
+  endTimeField.append(endTimeLabel, endTimeControl);
+  timeRangeEditor.append(startTimeField, timeSeparator, endTimeField);
+  timeCell.appendChild(timeRangeEditor);
+  const syncNextDayHint = () => {
+    const start = dailyPlanClockValue(startTimeInput);
+    const end = dailyPlanClockValue(endTimeInput);
+    const crossesMidnight = start && end && !isAllDayRange(start, end) && timeToMinutes(end) < timeToMinutes(start);
+    nextDayHint.classList.toggle('hidden', !crossesMidnight);
+    endTimeInput.setAttribute('aria-label', crossesMidnight ? `结束时间，次日 ${end}` : `结束时间，当前 ${end || '未设置'}`);
+  };
+  startTimeInput.addEventListener('change', syncNextDayHint);
+  endTimeInput.addEventListener('change', syncNextDayHint);
+  startTimeInput.addEventListener('change', clearDailyPlanValidationMessage);
+  endTimeInput.addEventListener('change', clearDailyPlanValidationMessage);
+  syncNextDayHint();
 
-  const titleCell = document.createElement('td');
+  const contentCell = document.createElement('td');
+  contentCell.className = 'daily-plan-content-cell';
+  const contentEditor = document.createElement('div');
+  contentEditor.className = 'daily-plan-content-editor';
+  const titleField = document.createElement('label');
+  titleField.className = 'daily-plan-content-field daily-plan-title-field';
+  const titleLabel = document.createElement('span');
+  titleLabel.textContent = '任务';
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
+  titleInput.className = 'daily-plan-title-input';
   titleInput.placeholder = '做什么事';
   titleInput.value = clean(values.title);
   titleInput.setAttribute('aria-label', '任务');
+  titleInput.addEventListener('input', () => {
+    titleInput.classList.remove('time-invalid');
+    titleInput.setAttribute('aria-invalid', 'false');
+    clearDailyPlanValidationMessage();
+  });
   titleInput.addEventListener('keydown', handleDailyPlanGridKeydown);
-  titleCell.appendChild(titleInput);
+  titleField.append(titleLabel, titleInput);
 
-  const planCell = document.createElement('td');
+  const planField = document.createElement('label');
+  planField.className = 'daily-plan-content-field daily-plan-details-field';
+  const planLabel = document.createElement('span');
+  planLabel.textContent = '详情';
   const planInput = document.createElement('input');
   planInput.type = 'text';
+  planInput.className = 'daily-plan-details-input';
   planInput.placeholder = '具体要做什么，可不填';
   planInput.value = clean(values.planDetails);
   planInput.setAttribute('aria-label', '具体内容');
+  planInput.addEventListener('input', clearDailyPlanValidationMessage);
   planInput.addEventListener('keydown', handleDailyPlanGridKeydown);
-  planCell.appendChild(planInput);
+  planField.append(planLabel, planInput);
+  contentEditor.append(titleField, planField);
+  contentCell.appendChild(contentEditor);
 
   const typeCell = document.createElement('td');
+  typeCell.className = 'daily-plan-type-cell';
   const typeSelect = createTypeSelect(values.typeId || values.type);
+  typeSelect.addEventListener('change', clearDailyPlanValidationMessage);
   typeSelect.addEventListener('keydown', handleDailyPlanGridKeydown);
   typeCell.appendChild(typeSelect);
 
@@ -3459,44 +3679,53 @@ function addDailyPlanRow(timeRange = '', values = {}) {
   deleteButton.textContent = '×';
   deleteButton.setAttribute('aria-label', '删除这一条任务');
   deleteButton.title = '删除这一条任务';
-  deleteButton.addEventListener('click', () => row.remove());
+  deleteButton.addEventListener('click', () => {
+    if (activeTaskTimePicker && row.contains(activeTaskTimePicker.anchor)) closeTaskTimePicker();
+    row.remove();
+    clearDailyPlanValidationMessage();
+  });
   deleteButton.addEventListener('keydown', handleDailyPlanGridKeydown);
   actionCell.appendChild(deleteButton);
 
-  row.append(startTimeCell, endTimeCell, titleCell, planCell, typeCell, actionCell);
+  row.append(timeCell, contentCell, typeCell, actionCell);
   dailyPlanTableBody.appendChild(row);
 }
 
 function createDailyPlanClockInput(value, label) {
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'daily-plan-clock-input';
-  input.placeholder = label === '开始时间' ? '09:00' : '11:30';
-  input.value = formatClockDisplay(value);
-  input.inputMode = 'numeric';
-  input.maxLength = 5;
-  input.autocomplete = 'off';
-  input.setAttribute('aria-label', `${label}，请输入四位数字`);
-  input.addEventListener('focus', () => input.select());
-  input.addEventListener('click', () => input.select());
-  input.addEventListener('beforeinput', (event) => {
-    if (event.inputType === 'insertText' && /\D/.test(event.data || '')) event.preventDefault();
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'daily-plan-clock-input task-time-button';
+  const normalized = timeToMinutes(value) === null ? '' : normalizeTime(value);
+  button.dataset.time = normalized;
+  button.textContent = normalized || '--:--';
+  button.setAttribute('aria-label', `${label}，当前 ${normalized || '未设置'}`);
+  button.title = `点击选择${label}`;
+  button.addEventListener('click', () => {
+    openTaskTimePicker(button, '', '', dailyPlanClockValue(button), label, {
+      onConfirm: (nextValue) => {
+        button.dataset.time = nextValue;
+        button.textContent = nextValue;
+        button.setAttribute('aria-label', `${label}，当前 ${nextValue}`);
+        button.classList.remove('time-invalid');
+        button.setAttribute('aria-invalid', 'false');
+        button.dispatchEvent(new Event('change'));
+      }
+    });
   });
-  input.addEventListener('input', () => {
-    input.value = formatClockDisplay(input.value);
-    const digits = formatClockDigits(input.value);
-    input.classList.toggle('time-invalid', digits.length === 4 && !clockDigitsToTime(input.value));
-  });
-  input.addEventListener('blur', () => validateDailyPlanClockInput(input));
-  input.addEventListener('keydown', handleDailyPlanGridKeydown);
-  return input;
+  button.addEventListener('keydown', handleDailyPlanGridKeydown);
+  return button;
 }
 
-function validateDailyPlanClockInput(input) {
-  const valid = Boolean(clockDigitsToTime(input.value));
-  input.classList.toggle('time-invalid', !valid && Boolean(input.value));
-  input.setAttribute('aria-invalid', String(!valid && Boolean(input.value)));
-  input.title = valid || !input.value ? '' : '请输入四位 24 小时制时间，例如 0930。';
+function dailyPlanClockValue(control) {
+  return normalizeTime(control && control.dataset ? control.dataset.time : '');
+}
+
+function validateDailyPlanClockInput(control) {
+  const value = dailyPlanClockValue(control);
+  const valid = timeToMinutes(value) !== null;
+  control.classList.toggle('time-invalid', !valid);
+  control.setAttribute('aria-invalid', String(!valid));
+  control.title = valid ? `点击修改时间：${value}` : '请点击选择时间。';
   return valid;
 }
 
@@ -3575,37 +3804,93 @@ function focusDailyPlanGridCell(rowIndex, columnIndex) {
   }
 }
 
-function handleDailyPlanDateModeChange() {
-  if (!dailyPlanMultiDay) return;
-  if (dailyPlanMultiDay.checked) {
-    commitDateInput(dailyPlanDate);
-    const date = normalizeDate(dailyPlanDate.value) || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
-    setDateInputValue(dailyPlanStartDate, date);
-    setDateInputValue(dailyPlanEndDate, date);
-  } else {
-    commitDateInput(dailyPlanStartDate);
-    const date = normalizeDate(dailyPlanStartDate.value) || dailyPlanDate.value || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
-    setDateInputValue(dailyPlanDate, date);
+function setDailyPlanRangeMode(mode) {
+  const nextMode = mode === 'weekday' ? 'weekday' : 'date';
+  if (dailyPlanRangeMode === nextMode) return;
+  dailyPlanRangeMode = nextMode;
+  if (nextMode === 'weekday' && selectedDailyPlanWeekdays().length === 0) {
+    const referenceDate = normalizeDate(dailyPlanDate?.value) || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
+    setSelectedDailyPlanWeekdays([String(parseLocalDate(referenceDate)?.getDay() ?? 1)]);
+  }
+  syncDailyPlanDateMode();
+  clearDailyPlanValidationMessage();
+}
+
+function toggleDailyPlanWeekday(button) {
+  if (!button) return;
+  const selected = button.getAttribute('aria-pressed') === 'true';
+  button.setAttribute('aria-pressed', String(!selected));
+  button.classList.toggle('is-selected', !selected);
+  clearDailyPlanValidationMessage();
+}
+
+function handleDailyPlanWeekPeriodChange() {
+  if (dailyPlanWeekPeriod?.value === 'custom' && !dailyPlanCustomRangeInitialized) {
+    const reference = normalizeDate(dailyPlanDate?.value) || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
+    const weekStart = dailyPlanWeekStart(reference);
+    setDateInputValue(dailyPlanStartDate, weekStart);
+    setDateInputValue(dailyPlanEndDate, shiftDate(weekStart, 6));
+    dailyPlanCustomRangeInitialized = true;
   }
   syncDailyPlanDateMode();
 }
 
+function selectedDailyPlanWeekdays() {
+  return WEEKDAY_KEYS.filter((key) => dailyPlanWeekdayButtons.some((button) => (
+    button.dataset.weekday === key && button.getAttribute('aria-pressed') === 'true'
+  )));
+}
+
+function setSelectedDailyPlanWeekdays(weekdays) {
+  const selected = new Set(normalizeTemplateWeekdays(weekdays));
+  dailyPlanWeekdayButtons.forEach((button) => {
+    const active = selected.has(button.dataset.weekday);
+    button.setAttribute('aria-pressed', String(active));
+    button.classList.toggle('is-selected', active);
+  });
+}
+
 function syncDailyPlanDateMode() {
-  const multiDay = Boolean(dailyPlanMultiDay && dailyPlanMultiDay.checked);
-  dailyPlanSingleDateRow.classList.toggle('hidden', multiDay);
-  dailyPlanSingleDateRow.setAttribute('aria-hidden', multiDay ? 'true' : 'false');
-  dailyPlanRangeRow.classList.toggle('hidden', !multiDay);
-  dailyPlanRangeRow.setAttribute('aria-hidden', multiDay ? 'false' : 'true');
-
-  if (!multiDay) {
-    setDateInputValue(dailyPlanDate, dailyPlanDate.value || dailyPlanStartDate.value || taskDateFilter.value || formatLocalDate(currentEffectiveNow));
-    return;
+  const isTemplate = dailyPlanPurpose === 'template';
+  const isWeekday = dailyPlanRangeMode === 'weekday';
+  const customPeriod = !isTemplate && isWeekday && dailyPlanWeekPeriod?.value === 'custom';
+  if (dailyPlanDateToolbar) dailyPlanDateToolbar.classList.toggle('is-template', isTemplate);
+  if (dailyPlanScopeControl) dailyPlanScopeControl.classList.remove('hidden');
+  if (dailyPlanSpecificDateButton) {
+    dailyPlanSpecificDateButton.textContent = isTemplate ? '通用模板' : '指定日期';
+    dailyPlanSpecificDateButton.classList.toggle('is-active', !isWeekday);
+    dailyPlanSpecificDateButton.setAttribute('aria-pressed', String(!isWeekday));
   }
+  if (dailyPlanWeekdayButton) {
+    dailyPlanWeekdayButton.classList.toggle('is-active', isWeekday);
+    dailyPlanWeekdayButton.setAttribute('aria-pressed', String(isWeekday));
+  }
+  const showSpecificDate = !isTemplate && !isWeekday;
+  dailyPlanSingleDateRow.classList.toggle('hidden', !showSpecificDate);
+  dailyPlanSingleDateRow.setAttribute('aria-hidden', String(!showSpecificDate));
+  dailyPlanWeekdayPanel?.classList.toggle('hidden', !isWeekday);
+  dailyPlanWeekdayPanel?.setAttribute('aria-hidden', String(!isWeekday));
+  dailyPlanWeekPeriodField?.classList.toggle('hidden', isTemplate);
+  dailyPlanRangeRow.classList.toggle('hidden', !customPeriod);
+  dailyPlanRangeRow.setAttribute('aria-hidden', String(!customPeriod));
 
-  const fallbackDate = dailyPlanDate.value || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
-  setDateInputValue(dailyPlanStartDate, dailyPlanStartDate.value || fallbackDate);
-  setDateInputValue(dailyPlanEndDate, dailyPlanEndDate.value || dailyPlanStartDate.value);
-  constrainDailyPlanEndDate();
+  if (showSpecificDate) {
+    setDateInputValue(dailyPlanDate, dailyPlanDate.value || dailyPlanStartDate.value || taskDateFilter.value || formatLocalDate(currentEffectiveNow));
+  }
+  if (customPeriod) {
+    const reference = dailyPlanDate.value || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
+    const weekStart = dailyPlanWeekStart(reference);
+    setDateInputValue(dailyPlanStartDate, dailyPlanStartDate.value || weekStart);
+    setDateInputValue(dailyPlanEndDate, dailyPlanEndDate.value || shiftDate(weekStart, 6));
+    constrainDailyPlanEndDate();
+  }
+}
+
+function dailyPlanWeekStart(value) {
+  const date = parseLocalDate(value) || parseLocalDate(formatLocalDate(currentEffectiveNow));
+  if (!date) return '';
+  const offsetFromMonday = (date.getDay() + 6) % 7;
+  return shiftDate(formatLocalDate(date), -offsetFromMonday);
 }
 
 function constrainDailyPlanEndDate() {
@@ -3617,33 +3902,54 @@ function constrainDailyPlanEndDate() {
   }
 }
 
-async function saveDailyPlanTable() {
-  const dates = selectedDailyPlanDates();
-  if (dates.length === 0) {
-    setStatus('请先选择有效的安排日期。', '');
-    return;
-  }
+function clearDailyPlanValidationMessage() {
+  if (!dailyPlanValidationMessage) return;
+  dailyPlanValidationMessage.textContent = '';
+  dailyPlanValidationMessage.classList.add('hidden');
+}
 
-  let hasInvalidRow = false;
+function showDailyPlanValidationMessage(message, control = null) {
+  if (dailyPlanValidationMessage) {
+    dailyPlanValidationMessage.textContent = message;
+    dailyPlanValidationMessage.classList.remove('hidden');
+    dailyPlanValidationMessage.scrollIntoView({ block: 'nearest' });
+  }
+  if (control && typeof control.focus === 'function') {
+    requestAnimationFrame(() => control.focus());
+  }
+}
+
+async function saveDailyPlanTable(options = {}) {
+  const saveAsTemplate = options.asTemplate === true || dailyPlanPurpose === 'template';
+  clearDailyPlanValidationMessage();
+  const rowIssues = [];
+  let firstInvalidControl = null;
   const planRows = Array.from(dailyPlanTableBody.querySelectorAll('tr'))
     .map((row, index) => {
-      const startTimeInput = row.querySelector('td:nth-child(1) input');
-      const endTimeInput = row.querySelector('td:nth-child(2) input');
-      const titleInput = row.querySelector('td:nth-child(3) input');
-      const planInput = row.querySelector('td:nth-child(4) input');
+      const startTimeInput = row.querySelector('[data-daily-plan-time="start"]');
+      const endTimeInput = row.querySelector('[data-daily-plan-time="end"]');
+      const titleInput = row.querySelector('.daily-plan-title-input');
+      const planInput = row.querySelector('.daily-plan-details-input');
       const typeSelect = row.querySelector('select');
       const title = clean(titleInput.value);
       const planDetails = clean(planInput.value);
       if (!title && !planDetails) return null;
 
-      const startTime = clockDigitsToTime(startTimeInput.value);
-      const endTime = clockDigitsToTime(endTimeInput.value);
+      const startTime = dailyPlanClockValue(startTimeInput);
+      const endTime = dailyPlanClockValue(endTimeInput);
       const validStart = validateDailyPlanClockInput(startTimeInput);
       const validEnd = validateDailyPlanClockInput(endTimeInput);
       titleInput.classList.toggle('time-invalid', !title);
       titleInput.setAttribute('aria-invalid', String(!title));
       if (!validStart || !validEnd || !title) {
-        hasInvalidRow = true;
+        const missing = [];
+        if (!title) missing.push('填写任务名称');
+        if (!validStart) missing.push('选择开始时间');
+        if (!validEnd) missing.push('选择结束时间');
+        rowIssues.push(`第 ${index + 1} 行请${missing.join('、')}`);
+        if (!firstInvalidControl) {
+          firstInvalidControl = !title ? titleInput : !validStart ? startTimeInput : endTimeInput;
+        }
         return null;
       }
 
@@ -3658,13 +3964,49 @@ async function saveDailyPlanTable() {
     })
     .filter(Boolean);
 
-  if (hasInvalidRow) {
-    setStatus('请补全标红的任务名和四位时间，时间需符合 24 小时制。', 'error', 5000);
+  if (rowIssues.length > 0) {
+    showDailyPlanValidationMessage(`${rowIssues.join('；')}。完成后再继续。`, firstInvalidControl);
     return;
   }
 
   if (planRows.length === 0) {
-    setStatus('请至少填写一条有效的时间段和任务。', '');
+    showDailyPlanValidationMessage('还没有可继续处理的任务。请至少填写一行任务名称，并选择开始和结束时间。', dailyPlanTableBody.querySelector('.daily-plan-title-input'));
+    return;
+  }
+
+  if (saveAsTemplate) {
+    const embedded = dailyPlanEmbedded;
+    const templateView = dailyPlanPurpose === 'template' ? 'templates' : 'compose';
+    const weekdays = dailyPlanRangeMode === 'weekday' ? selectedDailyPlanWeekdays() : [];
+    if (dailyPlanRangeMode === 'weekday' && weekdays.length === 0) {
+      showDailyPlanValidationMessage('请至少选择一个适用星期。', dailyPlanWeekdayButtons[0]);
+      return;
+    }
+    const items = planRows.map((planRow) => ({
+      startTime: planRow.startTime,
+      endTime: planRow.endTime,
+      title: planRow.title,
+      planDetails: planRow.planDetails,
+      typeId: planRow.typeId,
+      type: taskCategoryById(planRow.typeId)?.name || ''
+    }));
+    if (!embedded) closeDailyPlanTableModal();
+    openSaveTaskTemplateModal(items, {
+      embedded,
+      view: templateView,
+      weekdays,
+      returnContext: embedded ? { purpose: dailyPlanPurpose, view: templateView } : null
+    });
+    return;
+  }
+
+  if (dailyPlanRangeMode === 'weekday' && selectedDailyPlanWeekdays().length === 0) {
+    showDailyPlanValidationMessage('请至少选择一个星期，再确定安排。', dailyPlanWeekdayButtons[0]);
+    return;
+  }
+  const dates = selectedDailyPlanDates();
+  if (dates.length === 0) {
+    showDailyPlanValidationMessage('安排日期无效。请重新选择日期后再确认。', dailyPlanDate);
     return;
   }
 
@@ -3687,6 +4029,8 @@ async function saveDailyPlanTable() {
         status: '未评价',
         rawText: '',
         sheetName: '手动安排',
+        timeModel: START_DATE_TIME_MODEL,
+        statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
         order: nextOrderForDate(date, orderCounters) + planRow.index * 10,
         isDraft: false
       });
@@ -3697,7 +4041,9 @@ async function saveDailyPlanTable() {
   setDateInputValue(taskDateFilter, dates[0]);
   dates.forEach((date) => activePlanningDates.add(date));
   await saveState();
+  const embedded = dailyPlanEmbedded;
   closeDailyPlanTableModal();
+  if (embedded) closeTemplateMenuModal();
   renderAll();
   setStatus(dates.length === 1
     ? `已生成 ${newTasks.length} 条当日安排。`
@@ -3708,39 +4054,37 @@ function selectedDailyPlanDates() {
   commitDateInput(dailyPlanDate);
   commitDateInput(dailyPlanStartDate);
   commitDateInput(dailyPlanEndDate);
-  if (!dailyPlanMultiDay || !dailyPlanMultiDay.checked) {
+  if (dailyPlanRangeMode !== 'weekday') {
     const date = normalizeDate(dailyPlanDate.value);
     return date ? [date] : [];
   }
 
-  constrainDailyPlanEndDate();
-  return enumerateDates(normalizeDate(dailyPlanStartDate.value), normalizeDate(dailyPlanEndDate.value));
-}
-
-function handleDragOver(event) {
-  event.preventDefault();
-  event.currentTarget.classList.add('drag-over');
-}
-
-function handleDragLeave(event) {
-  event.currentTarget.classList.remove('drag-over');
-}
-
-function handleDrop(event) {
-  event.preventDefault();
-  event.currentTarget.classList.remove('drag-over');
-
-  const file = event.dataTransfer.files && event.dataTransfer.files[0];
-  if (!file) return;
-  importDroppedFile(file);
+  const weekdays = new Set(selectedDailyPlanWeekdays());
+  if (weekdays.size === 0) return [];
+  let startDate = '';
+  let endDate = '';
+  if (dailyPlanWeekPeriod?.value === 'custom') {
+    constrainDailyPlanEndDate();
+    startDate = normalizeDate(dailyPlanStartDate.value);
+    endDate = normalizeDate(dailyPlanEndDate.value);
+  } else {
+    const reference = normalizeDate(dailyPlanDate.value) || taskDateFilter.value || formatLocalDate(currentEffectiveNow);
+    startDate = dailyPlanWeekStart(reference);
+    if (dailyPlanWeekPeriod?.value === 'next') startDate = shiftDate(startDate, 7);
+    endDate = shiftDate(startDate, 6);
+  }
+  return enumerateDates(startDate, endDate).filter((date) => weekdays.has(String(parseLocalDate(date)?.getDay())));
 }
 
 function renderTasks(options = {}) {
   const selectedDate = clean(taskDateFilter.value);
-  const visibleTasks = selectedDate
+  const ownedTasks = selectedDate
     ? tasks.filter((task) => isRenderableTask(task) && normalizeDate(task.date) === selectedDate)
     : tasks.filter(isRenderableTask);
-  renderTaskDurationSummary(visibleTasks);
+  const visibleTasks = selectedDate
+    ? [...ownedTasks, ...carryoverTasksForDate(selectedDate)]
+    : ownedTasks;
+  renderTaskDurationSummary(ownedTasks);
   emptyState.classList.add('hidden');
   taskWorkspace.classList.remove('hidden');
   taskList.innerHTML = '';
@@ -3754,9 +4098,10 @@ function renderTasks(options = {}) {
     const hasTimeConflict = conflictingTaskIds.has(task.id);
     if (hasTimeConflict) {
       card.classList.add('task-time-conflict');
-      card.title = '这个时间段与同一天的其他任务冲突，请修改开始或结束时间。';
+      card.title = '这个时间段与其他任务的实际时间重叠，请修改开始或结束时间。';
     }
     card.dataset.taskId = task.id;
+    if (task._viewCarryover) card.classList.add('task-carryover');
     card.addEventListener('dragover', handleTaskDragOver);
     card.addEventListener('drop', handleTaskDrop);
 
@@ -3773,6 +4118,12 @@ function renderTasks(options = {}) {
 
     const body = document.createElement('div');
     body.className = 'task-body-editor';
+    let carryoverBadge = null;
+    if (task._viewCarryover) {
+      carryoverBadge = document.createElement('span');
+      carryoverBadge.className = 'task-carryover-badge';
+      carryoverBadge.textContent = '承接昨日 · 同一任务';
+    }
     const title = createInlineInput('text', task.title, '任务条目');
     title.className = 'inline-field task-title-input';
     title.addEventListener('blur', () => updateTaskField(task.id, 'title', title.value));
@@ -3805,10 +4156,11 @@ function renderTasks(options = {}) {
     deleteButton.setAttribute('aria-label', '删除条目');
     deleteButton.textContent = '×';
     deleteButton.addEventListener('click', () => deleteTask(task.id));
-    const statusSelect = createTaskStatusSelect(task.status);
+    const statusSelect = createTaskStatusSelect(task);
     statusSelect.addEventListener('change', () => {
       statusSelect.className = `task-status-select status-${statusClass(statusSelect.value)}`;
-      void updateTaskField(task.id, 'status', statusSelect.value, { render: false });
+      const status = statusSelect.value === '推定完成' ? '未评价' : statusSelect.value;
+      void updateTaskField(task.id, 'status', status, { render: false });
     });
     const noteButton = document.createElement('button');
     noteButton.className = `task-note-button${clean(task.details) ? ' has-note' : ''}`;
@@ -3822,36 +4174,127 @@ function renderTasks(options = {}) {
     dragHandle.draggable = true;
     dragHandle.title = '长按拖动调整顺序';
     dragHandle.textContent = '≡';
-    dragHandle.addEventListener('dragstart', (event) => handleTaskDragStart(event, task.id));
-    dragHandle.addEventListener('dragend', handleTaskDragEnd);
+    if (task._viewCarryover) {
+      dragHandle.draggable = false;
+      dragHandle.classList.add('is-disabled');
+      dragHandle.title = '承接昨日的任务请在开始日期调整顺序';
+    } else {
+      dragHandle.addEventListener('dragstart', (event) => handleTaskDragStart(event, task.id));
+      dragHandle.addEventListener('dragend', handleTaskDragEnd);
+    }
     actions.append(deleteButton, statusSelect, noteButton, dragHandle);
 
+    if (carryoverBadge) card.appendChild(carryoverBadge);
     card.append(time, body, actions);
     taskList.appendChild(card);
   });
 
-  taskList.appendChild(createAddTaskRow());
+  taskList.appendChild(createTaskListActions(ownedTasks.length));
   updateTaskTemporalView({
     scrollToCurrent: Boolean(options.scrollToCurrent),
     forceScroll: Boolean(options.forceScroll)
   });
 }
 
+function carryoverTasksForDate(date) {
+  const dayStart = parseLocalDate(normalizeDate(date));
+  if (!dayStart) return [];
+  dayStart.setHours(0, 0, 0, 0);
+  return tasks.filter((task) => {
+    if (!isRenderableTask(task) || !isContinuousTaskModel(task)) return false;
+    if (normalizeDate(task.date) === normalizeDate(date)) return false;
+    const interval = taskInterval(task);
+    return interval && interval.start < dayStart && interval.end > dayStart;
+  }).map((task, index) => ({
+    ...task,
+    _viewCarryover: true,
+    order: -1000000 + index
+  }));
+}
+
+function toggleTaskViewMode() {
+  taskViewMode = taskViewMode === 'focus' ? 'all' : 'focus';
+  highlightedTaskId = '';
+  renderTasks({ scrollToCurrent: true, forceScroll: false });
+}
+
+function applyTaskFocusView(selectedDate, now) {
+  const cards = Array.from(taskList.querySelectorAll('.task-card'));
+  const taskListActions = taskList.querySelector('.task-list-actions');
+  cards.forEach((card) => {
+    card.classList.remove('task-focus-hidden');
+    delete card.dataset.focusPosition;
+  });
+  if (taskListActions) taskListActions.classList.remove('task-focus-hidden');
+
+  const today = formatLocalDate(now);
+  if (selectedDate !== today) {
+    if (taskViewToggleButton) taskViewToggleButton.classList.add('hidden');
+    taskToolbarButtonStack?.classList.add('is-single');
+    return;
+  }
+
+  if (taskViewToggleButton) taskViewToggleButton.classList.remove('hidden');
+  taskToolbarButtonStack?.classList.remove('is-single');
+  if (taskViewMode === 'all') {
+    if (taskViewToggleButton) {
+      taskViewToggleButton.textContent = '精简视图';
+      taskViewToggleButton.title = '切换到精简视图，只显示当前任务及前后相邻任务';
+      taskViewToggleButton.setAttribute('aria-label', taskViewToggleButton.title);
+      taskViewToggleButton.setAttribute('aria-pressed', 'true');
+    }
+    return;
+  }
+
+  if (taskViewToggleButton) {
+    taskViewToggleButton.textContent = '全天视图';
+    taskViewToggleButton.title = '切换到全天视图，显示当天全部任务';
+    taskViewToggleButton.setAttribute('aria-label', taskViewToggleButton.title);
+    taskViewToggleButton.setAttribute('aria-pressed', 'false');
+  }
+  if (taskListActions) taskListActions.classList.add('task-focus-hidden');
+  if (cards.length === 0) return;
+
+  const currentIndex = cards.findIndex((card) => card.classList.contains('task-current'));
+  const visibleIndexes = new Set();
+  if (currentIndex >= 0) {
+    [currentIndex - 1, currentIndex, currentIndex + 1]
+      .filter((index) => index >= 0 && index < cards.length)
+      .forEach((index) => visibleIndexes.add(index));
+  } else {
+    let previousIndex = -1;
+    let nextIndex = -1;
+    cards.forEach((card, index) => {
+      if (card.classList.contains('task-past')) previousIndex = index;
+      if (nextIndex < 0 && card.classList.contains('task-future')) nextIndex = index;
+    });
+    if (previousIndex >= 0) visibleIndexes.add(previousIndex);
+    if (nextIndex >= 0) visibleIndexes.add(nextIndex);
+  }
+
+  if (visibleIndexes.size === 0) {
+    if (taskListActions) taskListActions.classList.remove('task-focus-hidden');
+    return;
+  }
+
+  cards.forEach((card, index) => {
+    const visible = visibleIndexes.has(index);
+    card.classList.toggle('task-focus-hidden', !visible);
+    if (!visible) return;
+    if (card.classList.contains('task-current')) {
+      card.dataset.focusPosition = index === currentIndex ? '当前' : '同时进行';
+    } else if (card.classList.contains('task-past')) {
+      card.dataset.focusPosition = '上一项';
+    } else {
+      card.dataset.focusPosition = '下一项';
+    }
+  });
+}
+
 function renderTaskDurationSummary(dayTasks) {
   if (!taskDurationSummary) return;
-
-  const minutesByType = sumTaskMinutesByType(dayTasks);
-  const parts = taskSummaryCategories(minutesByType)
-    .filter((category) => minutesByType[category.id] > 0)
-    .map((category) => `${category.name}：${formatDurationHours(minutesByType[category.id])}`);
-
-  taskDurationSummary.innerHTML = '';
-  parts.forEach((part) => {
-    const item = document.createElement('span');
-    item.textContent = part;
-    taskDurationSummary.appendChild(item);
-  });
-  taskDurationSummary.classList.toggle('hidden', parts.length === 0);
+  const total = renderTaskAllocationTrack(taskDurationSummary, dayTasks, 24 * 60, { includeTasks: true });
+  taskDurationSummary.classList.toggle('hidden', total === 0);
 }
 
 function renderProfileStats() {
@@ -3877,10 +4320,11 @@ function renderProfileStats() {
   });
   const scheduledDates = new Set(rangeTasks.map((task) => normalizeDate(task.date)).filter(Boolean));
   const statusCounts = {
-    done: rangeTasks.filter((task) => normalizeTaskStatus(task.status) === '已完成').length,
-    partial: rangeTasks.filter((task) => normalizeTaskStatus(task.status) === '部分完成').length,
-    missed: rangeTasks.filter((task) => normalizeTaskStatus(task.status) === '未完成').length,
-    pending: rangeTasks.filter((task) => normalizeTaskStatus(task.status) === '未评价').length
+    done: rangeTasks.filter((task) => ['已完成', '推定完成'].includes(effectiveTaskStatus(task))).length,
+    inferred: rangeTasks.filter((task) => effectiveTaskStatus(task) === '推定完成').length,
+    partial: rangeTasks.filter((task) => effectiveTaskStatus(task) === '部分完成').length,
+    missed: rangeTasks.filter((task) => effectiveTaskStatus(task) === '未完成').length,
+    pending: rangeTasks.filter((task) => effectiveTaskStatus(task) === '未评价').length
   };
   const minutesByType = sumTaskMinutesByType(rangeTasks);
   const totalMinutes = Object.values(minutesByType).reduce((sum, minutes) => sum + minutes, 0);
@@ -3892,7 +4336,7 @@ function renderProfileStats() {
   profileStatsSummary.innerHTML = '';
   [
     ['有安排日期', `${scheduledDates.size} / ${rangeDates.length}`, `共 ${rangeTasks.length} 个任务`, 'scheduled'],
-    ['完成', `${statusCounts.done} 个`, `${formatPercent(statusCounts.done, rangeTasks.length)} 的任务`, 'done'],
+    ['完成', `${statusCounts.done} 个`, statusCounts.inferred > 0 ? `其中 ${statusCounts.inferred} 个为自动推定` : `${formatPercent(statusCounts.done, rangeTasks.length)} 的任务`, 'done'],
     ['部分完成', `${statusCounts.partial} 个`, `${formatPercent(statusCounts.partial, rangeTasks.length)} 的任务`, 'partial'],
     ['未完成', `${statusCounts.missed} 个`, `${formatPercent(statusCounts.missed, rangeTasks.length)} 的任务`, 'missed'],
     ['未确认', `${statusCounts.pending} 个`, `${formatPercent(statusCounts.pending, rangeTasks.length)} 的任务`, 'pending']
@@ -4031,17 +4475,7 @@ function renderProfilePlanAllocation(rangeDates, rangeTasks, minutesByType, tota
 
     const track = document.createElement('div');
     track.className = 'stats-day-track';
-    if (total === 0) track.classList.add('empty');
-    taskSummaryCategories(minutesByType).forEach((category) => {
-      const minutes = minutesByType[category.id] || 0;
-      if (minutes <= 0) return;
-      const segment = document.createElement('span');
-      segment.className = 'stats-day-segment';
-      segment.style.background = category.color;
-      segment.style.width = `${Math.min(100, (minutes / capacity) * 100)}%`;
-      segment.title = `${category.name}：${formatDurationHours(minutes)}`;
-      track.appendChild(segment);
-    });
+    renderTaskAllocationTrack(track, bucket.tasks, capacity);
 
     const value = document.createElement('span');
     value.className = 'stats-day-value';
@@ -4049,6 +4483,44 @@ function renderProfilePlanAllocation(rangeDates, rangeTasks, minutesByType, tota
     row.append(label, track, value);
     profileStatsDaily.appendChild(row);
   });
+}
+
+function renderTaskAllocationTrack(track, taskItems, capacityMinutes, options = {}) {
+  const minutesByType = sumTaskMinutesByType(taskItems);
+  const total = Object.values(minutesByType).reduce((sum, minutes) => sum + minutes, 0);
+  const capacity = Math.max(Number(capacityMinutes) || 0, 1);
+  const entries = taskSummaryCategories(minutesByType)
+    .map((category) => ({ category, minutes: minutesByType[category.id] || 0 }))
+    .filter((entry) => entry.minutes > 0);
+
+  track.replaceChildren();
+  track.classList.toggle('empty', total === 0);
+  track.setAttribute('aria-label', entries.length
+    ? entries.map(({ category, minutes }) => `${category.name}：${formatDurationHours(minutes)}`).join('，')
+    : '暂无任务安排');
+
+  entries.forEach(({ category, minutes }) => {
+    const segment = document.createElement('span');
+    const categorySummary = `${category.name}：${formatDurationHours(minutes)}`;
+    const matchingTasks = options.includeTasks
+      ? taskItems.filter((task) => taskSummaryType(task) === category.id && taskDurationMinutes(task) > 0)
+      : [];
+    const taskLines = matchingTasks.slice(0, 8).map((task) => {
+      const title = clean(task.title) || '未命名任务';
+      return `${title}　${task.startTime}–${task.endTime}`;
+    });
+    if (matchingTasks.length > taskLines.length) taskLines.push(`另有 ${matchingTasks.length - taskLines.length} 项`);
+    const description = [categorySummary, ...taskLines].join('\n');
+    segment.className = 'stats-day-segment';
+    segment.style.background = category.color;
+    segment.style.width = `${Math.min(100, (minutes / capacity) * 100)}%`;
+    segment.title = description;
+    segment.setAttribute('aria-label', [categorySummary, ...taskLines].join('；'));
+    segment.tabIndex = 0;
+    track.appendChild(segment);
+  });
+
+  return total;
 }
 
 function renderProfileTimePie(minutesByType, totalMinutes) {
@@ -4138,11 +4610,11 @@ function profileTimeBuckets(rangeDates, tasksByDate) {
   return Array.from(buckets.values());
 }
 
-function renderAll() {
+function renderAll({ taskRenderOptions = {} } = {}) {
   populateJournalTagSelects();
   renderJournalTagSettings();
   renderTaskCategorySettings();
-  renderTasks();
+  renderTasks(taskRenderOptions);
   renderJournalList();
   renderSelectedJournal();
   renderProfileStats();
@@ -4187,6 +4659,7 @@ function showSettingsPanel(panelKey) {
   if (settingsEmptyPanel) settingsEmptyPanel.classList.toggle('hidden', Boolean(normalizedKey));
   if (normalizedKey === 'shortcuts') renderShortcutSettings();
   if (normalizedKey === 'updates') void refreshUpdateStatus();
+  if (normalizedKey === 'daily-plan-generation') renderAutoPlanningSettings();
 }
 
 function clearSettingsPanel() {
@@ -4233,6 +4706,8 @@ function mergeTasks(currentTasks, importedTasks) {
       sheetName: clean(task.sheetName),
       source: clean(task.source),
       splitParentId: clean(task.splitParentId),
+      timeModel: clean(task.timeModel),
+      statusPolicy: clean(task.statusPolicy),
       order,
       isDraft: Boolean(task.isDraft)
     };
@@ -4270,29 +4745,317 @@ function templateItemsForDate(date) {
     startTime: normalizeTime(task.startTime),
     endTime: normalizeTime(task.endTime),
     title: clean(task.title),
+    planDetails: clean(task.planDetails),
     typeId: taskCategoryForTask(task)?.id || '',
     type: taskCategoryForTask(task)?.name || clean(task.type)
   }));
 }
 
-function openSaveTaskTemplateModal() {
-  const date = ensureSelectedDate();
-  const items = templateItemsForDate(date);
-  if (items.length === 0) {
-    setStatus('当前日期没有可保存为模板的完整安排。', 'error', 4000);
-    return;
-  }
-
-  taskTemplateName.value = '';
-  taskTemplateSaveSummary.textContent = `将保存 ${items.length} 条安排，仅包含时间段、任务名和任务分类。`;
-  clearTaskTemplateSaveError();
-  saveTaskTemplateModal.classList.remove('hidden');
-  requestAnimationFrame(() => taskTemplateName.focus());
+function setCreateTaskActiveView(view = '') {
+  createTaskActionButtons.forEach((button) => {
+    const active = button.dataset.createTaskView === view;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
 }
 
-function closeSaveTaskTemplateModal() {
+function unmountEmbeddedCreateTaskCard() {
+  if (!embeddedCreateTaskCard) return;
+  const card = embeddedCreateTaskCard;
+  const parent = createTaskCardParents.get(card);
+  if (activeTaskTimePicker && card.contains(activeTaskTimePicker.anchor)) closeTaskTimePicker();
+
+  if (card === dailyPlanModalCard) {
+    if (dailyPlanVoiceRecording) void cancelDailyPlanVoiceInput();
+    setDailyPlanVoicePageVisible(false);
+    dailyPlanEmbedded = false;
+    dailyPlanPurpose = 'tasks';
+  } else if (card === saveTaskTemplateCard) {
+    saveTaskTemplateEmbedded = false;
+    saveTaskTemplateReturnContext = null;
+    saveTaskTemplateSourceView = 'templates';
+    pendingTaskTemplateItems = null;
+    clearTaskTemplateSaveError();
+  } else if (card === reuseTemplateCard) {
+    reuseTemplateEmbedded = false;
+    reuseTemplateMode = 'manage';
+    selectedTaskTemplateId = '';
+    expandedTaskTemplateId = '';
+    editingTaskTemplateId = '';
+  }
+
+  card.classList.remove('create-task-embedded-card');
+  if (parent) parent.appendChild(card);
+  embeddedCreateTaskCard = null;
+}
+
+function mountCreateTaskCard(view, card) {
+  if (!createTaskDetailPanel || !card) return false;
+  unmountEmbeddedCreateTaskCard();
+  if (!createTaskCardParents.has(card)) createTaskCardParents.set(card, card.parentElement);
+  createTaskWorkbenchCard?.classList.add('has-detail');
+  createTaskDetailPanel.classList.remove('hidden');
+  createTaskPlaceholder?.classList.add('hidden');
+  card.classList.add('create-task-embedded-card');
+  createTaskDetailPanel.appendChild(card);
+  embeddedCreateTaskCard = card;
+  setCreateTaskActiveView(view);
+  return true;
+}
+
+function showCreateTaskPlaceholder() {
+  unmountEmbeddedCreateTaskCard();
+  createTaskDetailPanel?.classList.remove('hidden');
+  createTaskPlaceholder?.classList.remove('hidden');
+  createTaskWorkbenchCard?.classList.remove('has-detail');
+  setCreateTaskActiveView('');
+}
+
+function openTemplateMenuModal() {
+  showCreateTaskPlaceholder();
+  templateMenuModal.classList.remove('hidden');
+  requestAnimationFrame(() => createTasksManualButton?.focus());
+}
+
+function closeTemplateMenuModal() {
+  showCreateTaskPlaceholder();
+  templateMenuModal.classList.add('hidden');
+}
+
+function configuredAutoPlanning() {
+  return normalizeAutoPlanning(
+    profile && profile.autoPlanning,
+    taskTemplates().map((template) => template.id)
+  );
+}
+
+function renderAutoPlanningSettings() {
+  if (!autoPlanningEnabled || !autoPlanningGenerationTime || !autoPlanningWeekdayGrid) return;
+  const config = configuredAutoPlanning();
+  const templates = taskTemplates();
+  const weekdayNames = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 0: '周日' };
+  autoPlanningEnabled.checked = config.enabled;
+  autoPlanningGenerationTime.value = config.generationTime;
+  autoPlanningWeekdayGrid.innerHTML = '';
+
+  WEEKDAY_KEYS.forEach((key) => {
+    const row = document.createElement('label');
+    row.className = 'auto-planning-weekday-row';
+    const label = document.createElement('span');
+    label.textContent = weekdayNames[key];
+    const select = document.createElement('select');
+    select.dataset.weekday = key;
+    select.setAttribute('aria-label', `${weekdayNames[key]}使用的安排模板`);
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = '不自动生成';
+    select.appendChild(emptyOption);
+    templates.forEach((template) => {
+      const option = document.createElement('option');
+      option.value = template.id;
+      option.textContent = template.name;
+      select.appendChild(option);
+    });
+    select.value = config.weekdayTemplateIds[key] || '';
+    row.append(label, select);
+    autoPlanningWeekdayGrid.appendChild(row);
+  });
+}
+
+function setAutoPlanningStatus(message, isError = false) {
+  if (!autoPlanningStatus) return;
+  autoPlanningStatus.textContent = message;
+  autoPlanningStatus.classList.toggle('hidden', !message);
+  autoPlanningStatus.classList.toggle('is-error', Boolean(message && isError));
+}
+
+async function saveAutoPlanningSettings() {
+  if (!autoPlanningEnabled || !autoPlanningGenerationTime || !autoPlanningWeekdayGrid) return;
+  const previousProfile = profile;
+  const current = configuredAutoPlanning();
+  const weekdayTemplateIds = {};
+  WEEKDAY_KEYS.forEach((key) => {
+    weekdayTemplateIds[key] = clean(autoPlanningWeekdayGrid.querySelector(`select[data-weekday="${key}"]`)?.value);
+  });
+  const templates = taskTemplates().map((template) => ({
+    ...template,
+    weekdays: WEEKDAY_KEYS.filter((key) => weekdayTemplateIds[key] === template.id)
+  }));
+  profile = {
+    ...normalizedProfile(),
+    taskTemplates: templates,
+    autoPlanning: normalizeAutoPlanning({
+      ...current,
+      enabled: autoPlanningEnabled.checked,
+      generationTime: normalizeGenerationTime(autoPlanningGenerationTime.value),
+      weekdayTemplateIds
+    }, templates.map((template) => template.id))
+  };
+  saveAutoPlanningButton.disabled = true;
+  setAutoPlanningStatus('正在保存…');
+  try {
+    await saveState();
+    renderAutoPlanningSettings();
+    const generated = await maybeGenerateScheduledPlans(currentEffectiveNow || new Date(), { force: true });
+    setAutoPlanningStatus(generated > 0
+      ? `设置已保存，并补充生成了 ${generated} 天的安排。`
+      : '每日计划生成设置已保存。');
+  } catch (error) {
+    profile = previousProfile;
+    renderAutoPlanningSettings();
+    setAutoPlanningStatus(`保存失败：${error.message || String(error)}`, true);
+  } finally {
+    saveAutoPlanningButton.disabled = false;
+  }
+}
+
+async function maybeGenerateScheduledPlans(now, options = {}) {
+  const config = configuredAutoPlanning();
+  if (!config.enabled || autoPlanningInFlight) return 0;
+  const minuteKey = `${formatLocalDate(now)}-${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (!options.force && minuteKey === lastAutoPlanningMinuteKey) return 0;
+  lastAutoPlanningMinuteKey = minuteKey;
+  autoPlanningInFlight = true;
+
+  try {
+    const templates = taskTemplates();
+    const generatedDates = { ...config.generatedDates };
+    let generatedCount = 0;
+    let profileChanged = false;
+
+    datesDueForGeneration(config, now).forEach((date) => {
+      const templateId = templateIdForDate(config, date);
+      const template = templates.find((item) => item.id === templateId);
+      if (!template || generatedDates[date]) return;
+
+      const existingTasks = tasks.filter((task) => normalizeDate(task.date) === date && isRenderableTask(task));
+      if (existingTasks.length > 0) {
+        generatedDates[date] = {
+          templateId: 'existing-plan',
+          generatedAt: now.toISOString()
+        };
+        profileChanged = true;
+        return;
+      }
+
+      const baseOrder = nextOrderForDate(date);
+      const clones = template.items.map((item, index) => ({
+        id: `auto-plan-${date}-${template.id}-${index}`,
+        title: item.title,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        date,
+        weekday: weekdayFromDate(date),
+        location: '',
+        typeId: item.typeId,
+        type: item.type,
+        planDetails: item.planDetails || '',
+        details: '',
+        status: '未评价',
+        statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
+        rawText: '',
+        sheetName: '',
+        source: 'auto-weekly-template',
+        timeModel: START_DATE_TIME_MODEL,
+        autoTemplateId: template.id,
+        autoPlanDate: date,
+        planBaseline: {
+          title: item.title,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          typeId: item.typeId,
+          planDetails: item.planDetails || ''
+        },
+        order: baseOrder + index * 10,
+        isDraft: false
+      }));
+      tasks = mergeTasks(tasks, clones);
+      generatedDates[date] = {
+        templateId: template.id,
+        generatedAt: now.toISOString()
+      };
+      generatedCount += 1;
+      profileChanged = true;
+    });
+
+    if (!profileChanged) return 0;
+    profile = {
+      ...normalizedProfile(),
+      autoPlanning: {
+        ...config,
+        generatedDates: pruneGeneratedDates(generatedDates, formatLocalDate(now))
+      }
+    };
+    await saveState();
+    if (pages.tasks.classList.contains('active')) renderTasks();
+    if (pages.profile.classList.contains('active')) renderProfileStats();
+    publishFloatingTask(now);
+    return generatedCount;
+  } catch (error) {
+    if (options.force) throw error;
+    setStatus(`自动生成安排失败：${error.message || String(error)}`, 'error', 6000);
+    return 0;
+  } finally {
+    autoPlanningInFlight = false;
+  }
+}
+
+function openSaveTaskTemplateModal(items = null, options = {}) {
+  const shouldEmbed = options.embedded === true;
+  saveTaskTemplateSourceView = clean(options.view) || 'templates';
+  saveTaskTemplateReturnContext = options.returnContext && typeof options.returnContext === 'object'
+    ? { ...options.returnContext }
+    : null;
+  const sourceItems = Array.isArray(items)
+    ? items
+    : templateItemsForDate(ensureSelectedDate());
+  pendingTaskTemplateItems = normalizeTaskTemplateItems(sourceItems);
+  pendingTaskTemplateWeekdays = normalizeTemplateWeekdays(options.weekdays);
+  const itemCount = pendingTaskTemplateItems.length;
+  if (itemCount === 0) {
+    pendingTaskTemplateItems = null;
+    saveTaskTemplateReturnContext = null;
+    saveTaskTemplateSourceView = 'templates';
+    setStatus('当前日期没有可保存为模板的完整安排。', 'error', 4000);
+    return false;
+  }
+
+  taskTemplateName.value = suggestedTaskTemplateName(pendingTaskTemplateWeekdays);
+  const weekdaySummary = pendingTaskTemplateWeekdays.length
+    ? `，适用于${formatTemplateWeekdays(pendingTaskTemplateWeekdays)}`
+    : '';
+  taskTemplateSaveSummary.textContent = `将保存 ${itemCount} 条安排${weekdaySummary}，包含时间、任务内容和分类。`;
+  clearTaskTemplateSaveError();
+  if (shouldEmbed) {
+    mountCreateTaskCard(saveTaskTemplateSourceView, saveTaskTemplateCard);
+    saveTaskTemplateEmbedded = true;
+    saveTaskTemplateModal.classList.add('hidden');
+  } else {
+    saveTaskTemplateEmbedded = false;
+    saveTaskTemplateModal.classList.remove('hidden');
+  }
+  requestAnimationFrame(() => taskTemplateName.focus());
+  return true;
+}
+
+function closeSaveTaskTemplateModal(options = {}) {
+  const embedded = saveTaskTemplateEmbedded;
+  const returnContext = saveTaskTemplateReturnContext;
+  const returnToEditor = options.returnToEditor !== false && Boolean(returnContext);
   saveTaskTemplateModal.classList.add('hidden');
   clearTaskTemplateSaveError();
+  pendingTaskTemplateItems = null;
+  pendingTaskTemplateWeekdays = [];
+  saveTaskTemplateEmbedded = false;
+  saveTaskTemplateReturnContext = null;
+  saveTaskTemplateSourceView = 'templates';
+  if (embedded && returnToEditor) {
+    mountCreateTaskCard(returnContext.view, dailyPlanModalCard);
+    dailyPlanPurpose = returnContext.purpose;
+    dailyPlanEmbedded = true;
+  } else if (embedded) {
+    showCreateTaskPlaceholder();
+  }
 }
 
 function clearTaskTemplateSaveError() {
@@ -4309,8 +5072,7 @@ function showTaskTemplateSaveError(message) {
 async function saveCurrentDayAsTemplate(event) {
   event.preventDefault();
   const name = clean(taskTemplateName.value);
-  const date = ensureSelectedDate();
-  const items = templateItemsForDate(date);
+  const items = normalizeTaskTemplateItems(pendingTaskTemplateItems || templateItemsForDate(ensureSelectedDate()));
   if (!name) {
     showTaskTemplateSaveError('请输入模板名称。');
     taskTemplateName.focus();
@@ -4321,33 +5083,81 @@ async function saveCurrentDayAsTemplate(event) {
     return;
   }
 
-  const templates = taskTemplates();
+  const templateId = `task-template-${Date.now()}`;
+  const weekdays = normalizeTemplateWeekdays(pendingTaskTemplateWeekdays);
+  const assignedWeekdays = new Set(weekdays);
+  const templates = taskTemplates().map((template) => ({
+    ...template,
+    weekdays: template.weekdays.filter((weekday) => !assignedWeekdays.has(weekday))
+  }));
   templates.push({
-    id: `task-template-${Date.now()}`,
+    id: templateId,
     name,
     createdAt: new Date().toISOString(),
+    weekdays,
     items
   });
-  profile = { ...normalizedProfile(), taskTemplates: templates };
+  const baseProfile = normalizedProfile();
+  const autoPlanning = normalizeAutoPlanning(baseProfile.autoPlanning, templates.map((template) => template.id));
+  const weekdayTemplateIds = { ...autoPlanning.weekdayTemplateIds };
+  weekdays.forEach((weekday) => {
+    weekdayTemplateIds[weekday] = templateId;
+  });
+  profile = {
+    ...baseProfile,
+    taskTemplates: templates,
+    autoPlanning: { ...autoPlanning, weekdayTemplateIds }
+  };
   await saveState();
-  closeSaveTaskTemplateModal();
-  setStatus(`已保存安排模板“${name}”。`, '', 5000);
+  const embedded = saveTaskTemplateEmbedded;
+  const returnContext = saveTaskTemplateReturnContext;
+  const sourceView = saveTaskTemplateSourceView;
+  if (returnContext && returnContext.purpose === 'tasks') {
+    closeSaveTaskTemplateModal({ returnToEditor: true });
+  } else {
+    closeSaveTaskTemplateModal({ returnToEditor: false });
+    if (embedded && sourceView === 'templates') openReuseTemplateModal({ embedded: true });
+  }
+  const weekdayStatus = weekdays.length ? `，并关联到${formatTemplateWeekdays(weekdays)}的每日计划生成` : '';
+  setStatus(`已保存安排模板“${name}”${weekdayStatus}。`, '', 5000);
 }
 
-function openReuseTemplateModal() {
+function openReuseTemplateModal(options = {}) {
+  const shouldEmbed = options.embedded === true;
+  reuseTemplateMode = options.mode === 'import' ? 'import' : 'manage';
   selectedTaskTemplateId = '';
   expandedTaskTemplateId = '';
   editingTaskTemplateId = '';
+  if (reuseTemplateTitle) reuseTemplateTitle.textContent = reuseTemplateMode === 'import' ? '导入模板' : '任务模板';
+  if (reuseTemplateIntro) {
+    reuseTemplateIntro.textContent = reuseTemplateMode === 'import'
+      ? '选择一个模板，导入后可继续修改任务内容、时间和使用日期。'
+      : '直接创建会把模板添加到任务页当前日期；如需调整内容或日期，请在“编排任务”中导入模板。';
+  }
+  createTaskTemplateButton?.classList.toggle('hidden', reuseTemplateMode === 'import');
+  confirmReuseTemplateButton?.classList.remove('hidden');
+  if (confirmReuseTemplateButton) confirmReuseTemplateButton.textContent = reuseTemplateMode === 'import' ? '导入' : '直接创建';
+  if (cancelReuseTemplateButton) cancelReuseTemplateButton.textContent = reuseTemplateMode === 'import' ? '取消' : '返回';
   renderTaskTemplateList();
-  closeImportChoiceModal();
-  reuseTemplateModal.classList.remove('hidden');
+  if (shouldEmbed) {
+    mountCreateTaskCard('templates', reuseTemplateCard);
+    reuseTemplateEmbedded = true;
+    reuseTemplateModal.classList.add('hidden');
+  } else {
+    reuseTemplateEmbedded = false;
+    reuseTemplateModal.classList.remove('hidden');
+  }
 }
 
 function closeReuseTemplateModal() {
+  const embedded = reuseTemplateEmbedded;
   reuseTemplateModal.classList.add('hidden');
   selectedTaskTemplateId = '';
   expandedTaskTemplateId = '';
   editingTaskTemplateId = '';
+  reuseTemplateEmbedded = false;
+  reuseTemplateMode = 'manage';
+  if (embedded) showCreateTaskPlaceholder();
 }
 
 function renderTaskTemplateList() {
@@ -4364,7 +5174,7 @@ function renderTaskTemplateList() {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'task-template-row';
-    row.setAttribute('aria-expanded', template.id === expandedTaskTemplateId ? 'true' : 'false');
+    row.setAttribute('aria-pressed', String(template.id === selectedTaskTemplateId));
 
     const selection = document.createElement('span');
     selection.className = 'task-template-selection';
@@ -4373,15 +5183,34 @@ function renderTaskTemplateList() {
     const name = document.createElement('strong');
     name.textContent = template.name;
 
+    const kind = document.createElement('span');
+    kind.className = 'task-template-kind';
+    kind.textContent = template.weekdays.length ? formatTemplateWeekdays(template.weekdays) : '通用模板';
+    if (template.weekdays.length) kind.classList.add('task-template-kind-cycle');
+
     const count = document.createElement('span');
     count.className = 'task-template-count';
     count.textContent = `${template.items.length} 条安排`;
 
-    const toggle = document.createElement('span');
-    toggle.className = 'task-template-toggle';
-    toggle.textContent = template.id === expandedTaskTemplateId ? '收起' : '展开';
-    row.append(selection, name, count, toggle);
+    row.append(selection, name, kind, count);
     row.addEventListener('click', () => selectTaskTemplate(template.id));
+
+    const toggleButton = document.createElement('button');
+    toggleButton.type = 'button';
+    toggleButton.className = 'task-template-toggle-button';
+    toggleButton.textContent = template.id === expandedTaskTemplateId ? '收起' : '展开';
+    toggleButton.setAttribute('aria-expanded', String(template.id === expandedTaskTemplateId));
+    toggleButton.setAttribute('aria-label', `${toggleButton.textContent}模板“${template.name}”`);
+    toggleButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (expandedTaskTemplateId === template.id) {
+        expandedTaskTemplateId = '';
+        if (editingTaskTemplateId === template.id) editingTaskTemplateId = '';
+      } else {
+        expandedTaskTemplateId = template.id;
+      }
+      renderTaskTemplateList();
+    });
 
     const editButton = document.createElement('button');
     editButton.type = 'button';
@@ -4391,6 +5220,7 @@ function renderTaskTemplateList() {
     editButton.title = template.id === editingTaskTemplateId ? '切换为预览' : `修改模板“${template.name}”`;
     editButton.setAttribute('aria-label', editButton.title);
     editButton.setAttribute('aria-pressed', String(template.id === editingTaskTemplateId));
+    editButton.classList.toggle('hidden', reuseTemplateMode === 'import');
     editButton.addEventListener('click', (event) => {
       event.stopPropagation();
       selectedTaskTemplateId = template.id;
@@ -4405,6 +5235,7 @@ function renderTaskTemplateList() {
     deleteButton.textContent = '×';
     deleteButton.title = `删除模板“${template.name}”`;
     deleteButton.setAttribute('aria-label', deleteButton.title);
+    deleteButton.classList.toggle('hidden', reuseTemplateMode === 'import');
     deleteButton.addEventListener('click', async (event) => {
       event.stopPropagation();
       deleteButton.disabled = true;
@@ -4413,7 +5244,8 @@ function renderTaskTemplateList() {
 
     const rowLayout = document.createElement('div');
     rowLayout.className = 'task-template-row-layout';
-    rowLayout.append(row, editButton, deleteButton);
+    rowLayout.classList.toggle('is-import', reuseTemplateMode === 'import');
+    rowLayout.append(row, toggleButton, editButton, deleteButton);
     item.appendChild(rowLayout);
 
     if (template.id === expandedTaskTemplateId) {
@@ -4441,9 +5273,12 @@ async function deleteTaskTemplate(templateId) {
   const template = templates.find((item) => item.id === templateId);
   if (!template) return;
 
+  const nextTemplates = templates.filter((item) => item.id !== templateId);
+  const baseProfile = normalizedProfile();
   profile = {
-    ...normalizedProfile(),
-    taskTemplates: templates.filter((item) => item.id !== templateId)
+    ...baseProfile,
+    taskTemplates: nextTemplates,
+    autoPlanning: normalizeAutoPlanning(baseProfile.autoPlanning, nextTemplates.map((item) => item.id))
   };
   if (selectedTaskTemplateId === templateId) selectedTaskTemplateId = '';
   if (expandedTaskTemplateId === templateId) expandedTaskTemplateId = '';
@@ -4454,14 +5289,7 @@ async function deleteTaskTemplate(templateId) {
 }
 
 function selectTaskTemplate(templateId) {
-  if (selectedTaskTemplateId === templateId) {
-    expandedTaskTemplateId = expandedTaskTemplateId === templateId ? '' : templateId;
-    if (expandedTaskTemplateId !== templateId) editingTaskTemplateId = '';
-  } else {
-    selectedTaskTemplateId = templateId;
-    expandedTaskTemplateId = templateId;
-    editingTaskTemplateId = '';
-  }
+  selectedTaskTemplateId = templateId;
   renderTaskTemplateList();
 }
 
@@ -4480,10 +5308,27 @@ function createTaskTemplateEditor(templateId, task, itemIndex) {
   const row = document.createElement('div');
   row.className = 'task-template-editor-row';
 
+  let currentStartTime = task.startTime;
+  let currentEndTime = task.endTime;
+  const syncCrossDayDisplay = () => {
+    const crossesMidnight = taskCrossesMidnight({ startTime: currentStartTime, endTime: currentEndTime });
+    endTimeWrap.classList.toggle('is-next-day', crossesMidnight);
+    nextDayHint.classList.toggle('hidden', !crossesMidnight);
+    endTime.setAttribute('aria-label', crossesMidnight
+      ? `结束时间，次日 ${currentEndTime}`
+      : `结束时间，当前 ${currentEndTime}`);
+  };
   const startTime = createTaskTemplateTimeEditor(
     task.startTime,
     '开始时间',
-    (value) => updateTaskTemplateItem(templateId, itemIndex, { startTime: value })
+    async (value) => {
+      const saved = await updateTaskTemplateItem(templateId, itemIndex, { startTime: value });
+      if (saved) {
+        currentStartTime = value;
+        syncCrossDayDisplay();
+      }
+      return saved;
+    }
   );
   const separator = document.createElement('span');
   separator.className = 'task-template-editor-separator';
@@ -4491,8 +5336,22 @@ function createTaskTemplateEditor(templateId, task, itemIndex) {
   const endTime = createTaskTemplateTimeEditor(
     task.endTime,
     '结束时间',
-    (value) => updateTaskTemplateItem(templateId, itemIndex, { endTime: value })
+    async (value) => {
+      const saved = await updateTaskTemplateItem(templateId, itemIndex, { endTime: value });
+      if (saved) {
+        currentEndTime = value;
+        window.requestAnimationFrame(syncCrossDayDisplay);
+      }
+      return saved;
+    }
   );
+  const endTimeWrap = document.createElement('span');
+  endTimeWrap.className = 'task-template-end-time';
+  const nextDayHint = document.createElement('span');
+  nextDayHint.className = 'task-template-next-day-hint hidden';
+  nextDayHint.textContent = '次日';
+  endTimeWrap.append(endTime, nextDayHint);
+  syncCrossDayDisplay();
 
   const title = document.createElement('input');
   title.type = 'text';
@@ -4566,58 +5425,33 @@ function createTaskTemplateEditor(templateId, task, itemIndex) {
     await deleteTaskTemplateItem(templateId, itemIndex);
   });
 
-  row.append(startTime, separator, endTime, title, category, deleteButton);
+  row.append(startTime, separator, endTimeWrap, title, category, deleteButton);
   return row;
 }
 
 function createTaskTemplateTimeEditor(value, label, onCommit) {
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'task-template-time-input';
-  input.value = formatClockDisplay(value);
-  input.inputMode = 'numeric';
-  input.maxLength = 5;
-  input.autocomplete = 'off';
-  input.setAttribute('aria-label', `${label}，请输入四位 24 小时制时间`);
-  let committedValue = clockDigitsToTime(value);
-
-  input.addEventListener('focus', () => input.select());
-  input.addEventListener('click', () => input.select());
-  input.addEventListener('beforeinput', (event) => {
-    if (event.inputType === 'insertText' && /\D/.test(event.data || '')) event.preventDefault();
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'task-template-time-button task-time-button';
+  let committedValue = timeToMinutes(value) === null ? '00:00' : normalizeTime(value);
+  button.textContent = committedValue;
+  button.setAttribute('aria-label', `${label}，当前 ${committedValue}`);
+  button.title = `点击选择${label}`;
+  button.addEventListener('click', () => {
+    openTaskTimePicker(button, '', '', committedValue, label, {
+      onConfirm: async (nextValue) => {
+        if (nextValue === committedValue) return;
+        button.disabled = true;
+        const saved = await onCommit(nextValue);
+        button.disabled = false;
+        if (!saved) return;
+        committedValue = nextValue;
+        button.textContent = nextValue;
+        button.setAttribute('aria-label', `${label}，当前 ${nextValue}`);
+      }
+    });
   });
-  input.addEventListener('input', () => {
-    input.value = formatClockDisplay(input.value);
-    const digits = formatClockDigits(input.value);
-    input.classList.toggle('time-invalid', digits.length === 4 && !clockDigitsToTime(input.value));
-  });
-  input.addEventListener('blur', async () => {
-    const nextValue = clockDigitsToTime(input.value);
-    if (!nextValue) {
-      input.value = committedValue;
-      input.classList.remove('time-invalid');
-      setStatus(`${label}格式不正确，请输入四位 24 小时制时间。`, 'error', 4000);
-      return;
-    }
-    input.value = nextValue;
-    if (nextValue === committedValue) return;
-    input.disabled = true;
-    const saved = await onCommit(nextValue);
-    input.disabled = false;
-    if (saved) committedValue = nextValue;
-    else input.value = committedValue;
-  });
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      input.blur();
-    } else if (event.key === 'Escape') {
-      input.value = committedValue;
-      input.classList.remove('time-invalid');
-      input.blur();
-    }
-  });
-  return input;
+  return button;
 }
 
 async function updateTaskTemplateItem(templateId, itemIndex, patch) {
@@ -4664,7 +5498,13 @@ async function persistTaskTemplateItems(templateId, items) {
   const nextTemplates = templates.map((template, index) => (
     index === templateIndex ? { ...template, items } : template
   ));
-  profile = { ...normalizedProfile(), taskTemplates: nextTemplates };
+  const baseProfile = normalizedProfile();
+  const normalizedNextTemplates = normalizeTaskTemplates(nextTemplates, taskCategories());
+  profile = {
+    ...baseProfile,
+    taskTemplates: normalizedNextTemplates,
+    autoPlanning: normalizeAutoPlanning(baseProfile.autoPlanning, normalizedNextTemplates.map((template) => template.id))
+  };
   try {
     await saveState();
     return true;
@@ -4681,7 +5521,9 @@ function createTaskTemplatePreview(task) {
 
   const time = document.createElement('span');
   time.className = 'task-template-time';
-  time.textContent = `${task.startTime} - ${task.endTime}`;
+  const crossesMidnight = taskCrossesMidnight(task);
+  time.textContent = `${task.startTime} - ${crossesMidnight ? '次日 ' : ''}${task.endTime}`;
+  if (crossesMidnight) time.classList.add('is-next-day');
 
   const title = document.createElement('span');
   title.className = 'task-template-title';
@@ -4697,19 +5539,41 @@ function createTaskTemplatePreview(task) {
   return row;
 }
 
-async function confirmReuseTemplate() {
-  const template = taskTemplates().find((item) => item.id === selectedTaskTemplateId);
-  if (!template) {
-    setStatus('请选择要复用的安排模板。', 'error', 4000);
+async function confirmTaskTemplateSelection() {
+  if (reuseTemplateMode === 'import') {
+    importSelectedTemplateIntoDailyPlan();
     return;
+  }
+
+  const template = taskTemplates().find((item) => item.id === selectedTaskTemplateId);
+  if (!template) return;
+
+  const targetDate = ensureSelectedDate();
+  const existingTaskCount = tasks.filter((task) => (
+    isRenderableTask(task) && normalizeDate(task.date) === targetDate
+  )).length;
+  if (existingTaskCount > 0) {
+    const response = await window.whbr.showMessageBox({
+      type: 'question',
+      title: '当前日期已有任务',
+      message: `${targetDate} 已有 ${existingTaskCount} 条任务，本模板将再添加 ${template.items.length} 条。`,
+      detail: '可以直接追加，也可以转到编排页面批量调整任务内容、详情、时间和日期。',
+      buttons: ['继续追加', '转到编排', '取消'],
+      defaultId: 2,
+      cancelId: 2
+    });
+    if (!response || response.response === 2) return;
+    if (response.response === 1) {
+      transferTemplateToDailyPlan(template);
+      return;
+    }
   }
 
   confirmReuseTemplateButton.disabled = true;
   try {
-    const targetDate = ensureSelectedDate();
     const baseOrder = nextOrderForDate(targetDate);
     const timestamp = Date.now();
-    const clones = template.items.map((task, index) => ({
+    const clonedTasks = template.items.map((task, index) => ({
       id: `template-reuse-${timestamp}-${index}`,
       title: task.title,
       startTime: task.startTime,
@@ -4719,27 +5583,82 @@ async function confirmReuseTemplate() {
       location: '',
       typeId: task.typeId,
       type: task.type,
-      planDetails: '',
+      planDetails: task.planDetails || '',
       details: '',
       status: '未评价',
       rawText: '',
       sheetName: '',
       source: 'task-template',
       splitParentId: '',
+      timeModel: START_DATE_TIME_MODEL,
+      statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
       order: baseOrder + index * 10,
       isDraft: false
     }));
 
-    tasks = mergeTasks(tasks, clones);
+    tasks = mergeTasks(tasks, clonedTasks);
     activePlanningDates.add(targetDate);
     await saveState();
+    const embedded = reuseTemplateEmbedded;
     closeReuseTemplateModal();
-    renderTasks();
-    setStatus(`已复用模板“${template.name}”，添加 ${clones.length} 条安排。`, '', 5000);
+    if (embedded) closeTemplateMenuModal();
+    renderTasks({ scrollToCurrent: targetDate === formatLocalDate(currentEffectiveNow) });
+    setStatus(`已使用模板“${template.name}”为 ${targetDate} 添加 ${clonedTasks.length} 条任务。`, '', 5000);
   } catch (error) {
     confirmReuseTemplateButton.disabled = false;
-    setStatus(`复用模板失败：${error.message}`, 'error', 5000);
+    setStatus(`使用模板创建任务失败：${error.message || String(error)}`, 'error', 5000);
   }
+}
+
+function importSelectedTemplateIntoDailyPlan() {
+  const template = taskTemplates().find((item) => item.id === selectedTaskTemplateId);
+  if (!template) {
+    return;
+  }
+  if (reuseTemplateMode !== 'import') {
+    return;
+  }
+
+  fillDailyPlanFromTemplate(template);
+  closeReuseTemplateModal();
+  requestAnimationFrame(() => focusDailyPlanGridCell(0, 0));
+}
+
+function transferTemplateToDailyPlan(template) {
+  const embedded = reuseTemplateEmbedded;
+  closeReuseTemplateModal();
+  openDailyPlanTableModal({ purpose: 'tasks', embedded, view: 'compose' });
+  fillDailyPlanFromTemplate(template);
+  requestAnimationFrame(() => focusDailyPlanGridCell(0, 0));
+}
+
+function fillDailyPlanFromTemplate(template) {
+  if (!template) return;
+
+  if (template.weekdays.length) {
+    dailyPlanRangeMode = 'weekday';
+    setSelectedDailyPlanWeekdays(template.weekdays);
+    syncDailyPlanDateMode();
+  }
+
+  Array.from(dailyPlanTableBody.querySelectorAll('tr')).forEach((row) => {
+    const title = clean(row.querySelector('.daily-plan-title-input')?.value);
+    const details = clean(row.querySelector('.daily-plan-details-input')?.value);
+    if (!title && !details) row.remove();
+  });
+
+  template.items.forEach((task) => {
+    addDailyPlanRow(`${task.startTime}-${task.endTime}`, {
+      title: task.title,
+      planDetails: task.planDetails || '',
+      typeId: task.typeId,
+      type: task.type
+    });
+  });
+
+  clearDailyPlanValidationMessage();
+  const weekdayText = template.weekdays.length ? `，并选择了${formatTemplateWeekdays(template.weekdays)}` : '';
+  setDailyPlanImportNotice(`已导入模板“${template.name}”的 ${template.items.length} 条任务${weekdayText}，可继续修改内容、时间和日期。`);
 }
 
 function createBlankTask(date) {
@@ -4760,6 +5679,8 @@ function createBlankTask(date) {
     rawText: '',
     sheetName: '',
     source: 'manual',
+    timeModel: START_DATE_TIME_MODEL,
+    statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
     order: nextOrderForDate(date),
     isDraft: true
   };
@@ -4782,6 +5703,71 @@ function createAddTaskRow() {
   return row;
 }
 
+function createTaskListActions(ownedTaskCount) {
+  const actions = document.createElement('div');
+  actions.className = 'task-list-actions';
+
+  const addButton = createAddTaskRow();
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.className = 'clear-day-tasks-button';
+  clearButton.textContent = '清空当日任务';
+  clearButton.disabled = ownedTaskCount <= 0;
+  clearButton.title = ownedTaskCount > 0 ? '清空当前所选日期的全部任务' : '当前日期没有可清空的任务';
+  clearButton.addEventListener('click', () => void clearTasksForSelectedDate());
+
+  actions.append(addButton, clearButton);
+  return actions;
+}
+
+async function clearTasksForSelectedDate() {
+  const date = ensureSelectedDate();
+  const dateTasks = tasks.filter((task) => normalizeDate(task.date) === date);
+  if (dateTasks.length === 0) {
+    setStatus(`${date} 没有可清空的任务。`, '', 3500);
+    return;
+  }
+
+  const response = await window.whbr.showMessageBox({
+    type: 'warning',
+    title: '清空当日任务',
+    message: `确认清空 ${date} 的 ${dateTasks.length} 条任务吗？`,
+    detail: '从昨日承接显示的任务不会被删除。确认后可使用 Ctrl+Z 恢复本次清空的任务。',
+    buttons: ['清空任务', '取消'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  if (!response || response.response !== 0) return;
+
+  const ownedTaskIds = new Set(dateTasks.map((task) => clean(task.id)).filter(Boolean));
+  const deletedTasks = tasks.filter((task) => (
+    normalizeDate(task.date) === date || ownedTaskIds.has(clean(task.splitParentId))
+  ));
+  const deletedTaskIds = new Set(deletedTasks.map((task) => task.id));
+  tasks = tasks.filter((task) => !deletedTaskIds.has(task.id));
+  recordTaskDeletion(deletedTasks);
+  activePlanningDates.add(date);
+
+  const autoPlanning = configuredAutoPlanning();
+  profile = {
+    ...normalizedProfile(),
+    autoPlanning: {
+      ...autoPlanning,
+      generatedDates: {
+        ...autoPlanning.generatedDates,
+        [date]: {
+          templateId: 'cleared-by-user',
+          generatedAt: new Date().toISOString()
+        }
+      }
+    }
+  };
+
+  await saveState();
+  renderTasks();
+  setStatus(`已清空 ${date} 的 ${dateTasks.length} 条任务。按 Ctrl+Z 可恢复。`, '', 6000);
+}
+
 function createInlineInput(type, value, label) {
   const input = document.createElement('input');
   input.className = 'inline-field';
@@ -4795,20 +5781,37 @@ function createTaskTimeButton(task, field, label) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'inline-field time-input task-time-button';
-  button.textContent = displayTaskTime(task[field]);
+  button.textContent = displayTaskTime(task, field);
   button.setAttribute('aria-label', `${label}，当前 ${button.textContent}`);
   button.title = `点击选择${label}`;
   button.addEventListener('click', () => openTaskTimePicker(button, task.id, field, task[field], label));
   return button;
 }
 
-function displayTaskTime(value) {
-  return timeToMinutes(value) === null ? '--:--' : normalizeTime(value);
+function displayTaskTime(task, field) {
+  const value = task && task[field];
+  if (timeToMinutes(value) === null) return '--:--';
+  const time = normalizeTime(value);
+  if (task && task._viewCarryover) return field === 'startTime' ? `昨日 ${time}` : time;
+  if (field === 'endTime' && taskCrossesMidnight(task)) return `次日 ${time}`;
+  return time;
 }
 
-function openTaskTimePicker(anchor, taskId, field, value, label) {
-  const normalized = displayTaskTime(value) === '--:--' ? '00:00' : displayTaskTime(value);
-  activeTaskTimePicker = { anchor, taskId, field };
+function taskCrossesMidnight(task) {
+  const start = timeToMinutes(task && task.startTime);
+  const end = timeToMinutes(task && task.endTime);
+  if (start === null || end === null || isAllDayRange(task.startTime, task.endTime)) return false;
+  return end < start;
+}
+
+function openTaskTimePicker(anchor, taskId, field, value, label, options = {}) {
+  const normalized = timeToMinutes(value) === null ? '00:00' : normalizeTime(value);
+  activeTaskTimePicker = {
+    anchor,
+    taskId,
+    field,
+    onConfirm: typeof options.onConfirm === 'function' ? options.onConfirm : null
+  };
   taskTimePickerTitle.textContent = label;
   taskTimePickerHour.value = normalized.slice(0, 2);
   taskTimePickerMinute.value = normalized.slice(3, 5);
@@ -4872,8 +5875,12 @@ async function confirmTaskTimePicker() {
   normalizeTaskTimePickerUnit(taskTimePickerHour, 23);
   normalizeTaskTimePickerUnit(taskTimePickerMinute, 59);
   const value = `${taskTimePickerHour.value}:${taskTimePickerMinute.value}`;
-  const { taskId, field } = activeTaskTimePicker;
+  const { taskId, field, onConfirm } = activeTaskTimePicker;
   closeTaskTimePicker();
+  if (onConfirm) {
+    await onConfirm(value);
+    return;
+  }
   await updateTaskField(taskId, field, value, { render: false, splitCrossDay: true });
 }
 
@@ -4942,13 +5949,20 @@ function colorWithAlpha(color, alpha) {
   return `rgba(${parseInt(match[1], 16)}, ${parseInt(match[2], 16)}, ${parseInt(match[3], 16)}, ${alpha})`;
 }
 
-function createTaskStatusSelect(value) {
-  const status = normalizeTaskStatus(value);
+function createTaskStatusSelect(task) {
+  const status = effectiveTaskStatus(task);
   const select = document.createElement('select');
   select.className = `task-status-select status-${statusClass(status)}`;
   select.setAttribute('aria-label', '完成情况');
+  populateTaskStatusSelect(select, status);
+  return select;
+}
+
+function populateTaskStatusSelect(select, status) {
+  select.innerHTML = '';
   [
     ['未评价', '完成情况'],
+    ...(status === '推定完成' ? [['推定完成', '完成（自动）']] : []),
     ['已完成', '完成'],
     ['部分完成', '部分完成'],
     ['未完成', '未完成']
@@ -4959,12 +5973,17 @@ function createTaskStatusSelect(value) {
     select.appendChild(option);
   });
   select.value = status;
-  return select;
+  select.dataset.effectiveStatus = status;
+  select.className = `task-status-select status-${statusClass(status)}`;
 }
 
 function normalizeTaskStatus(value) {
   const status = clean(value);
   return ['已完成', '部分完成', '未完成'].includes(status) ? status : '未评价';
+}
+
+function effectiveTaskStatus(task, now = currentEffectiveNow || new Date()) {
+  return inferredTaskStatus(task, now);
 }
 
 function blurOnEnter(event) {
@@ -4987,7 +6006,9 @@ async function updateTaskField(taskId, field, value, options = {}) {
   if (['title', 'startTime', 'endTime', 'planDetails'].includes(field)) {
     task.isDraft = !clean(task.title) || !clean(task.startTime) || !clean(task.endTime);
   }
-  const normalizedTasks = options.splitCrossDay ? normalizeTaskDayBoundaries() : { changed: false };
+  const normalizedTasks = options.splitCrossDay && !isContinuousTaskModel(task)
+    ? normalizeTaskDayBoundaries()
+    : { changed: false };
 
   if (field === 'startTime' || field === 'endTime') {
     publishFloatingTask(currentEffectiveNow);
@@ -5007,11 +6028,14 @@ async function updateTaskField(taskId, field, value, options = {}) {
 
 function refreshTasksAfterInlineEdit(taskId) {
   const selectedDate = clean(taskDateFilter.value);
-  const visibleTasks = selectedDate
+  const ownedTasks = selectedDate
     ? tasks.filter((task) => isRenderableTask(task) && normalizeDate(task.date) === selectedDate)
     : tasks.filter(isRenderableTask);
+  const visibleTasks = selectedDate
+    ? [...ownedTasks, ...carryoverTasksForDate(selectedDate)]
+    : ownedTasks;
   const conflictingTaskIds = findConflictingTaskIds(sortTasksForDisplay(visibleTasks));
-  renderTaskDurationSummary(visibleTasks);
+  renderTaskDurationSummary(ownedTasks);
 
   taskList.querySelectorAll('.task-card').forEach((card) => {
     const task = tasks.find((item) => item.id === card.dataset.taskId);
@@ -5020,7 +6044,7 @@ function refreshTasksAfterInlineEdit(taskId) {
     const hasTimeConflict = conflictingTaskIds.has(task.id);
     syncTaskCardTimeInputs(card, task);
     card.classList.toggle('task-time-conflict', hasTimeConflict);
-    card.title = hasTimeConflict ? '这个时间段与同一天的其他任务冲突，请修改开始或结束时间。' : '';
+    card.title = hasTimeConflict ? '这个时间段与其他任务的实际时间重叠，请修改开始或结束时间。' : '';
     const timeEditor = card.querySelector('.task-time-editor');
     if (timeEditor) timeEditor.classList.toggle('task-time-conflict-text', hasTimeConflict);
     card.querySelectorAll('.time-input').forEach((input) => {
@@ -5040,9 +6064,9 @@ function renderTasksPreservingScroll() {
 
 function syncTaskCardTimeInputs(card, task) {
   const inputs = Array.from(card.querySelectorAll('.time-input'));
-  const values = [task.startTime, task.endTime];
+  const fields = ['startTime', 'endTime'];
   inputs.forEach((input, index) => {
-    input.textContent = displayTaskTime(values[index] || '');
+    input.textContent = displayTaskTime(task, fields[index]);
     input.setAttribute('aria-label', `${index === 0 ? '开始时间' : '结束时间'}，当前 ${input.textContent}`);
   });
 }
@@ -5089,6 +6113,9 @@ function compareTasksByOrderThenTime(a, b) {
 }
 
 function normalizeTaskIntoDayPieces(task, date, orderCounters) {
+  if (isContinuousTaskModel(task)) {
+    return [normalizeTaskPiece(task, normalizeDate(date), task.startTime, task.endTime, '', orderCounters)];
+  }
   const start = timeToMinutes(task.startTime);
   const end = timeToMinutes(task.endTime);
   const normalizedDate = normalizeDate(date);
@@ -5309,8 +6336,15 @@ function updateTaskTemporalView(options = {}) {
     const stage = classifyTaskStage(task, now);
     if (!stage) return;
     card.classList.add(`task-${stage}`);
+    const statusSelect = card.querySelector('.task-status-select');
+    const status = effectiveTaskStatus(task, now);
+    if (statusSelect && statusSelect.dataset.effectiveStatus !== status) {
+      populateTaskStatusSelect(statusSelect, status);
+    }
     if (stage === 'current' && !currentTaskId) currentTaskId = task.id;
   });
+
+  applyTaskFocusView(selectedDate, now);
 
   if (!options.scrollToCurrent || !currentTaskId || draggedTaskId) {
     highlightedTaskId = currentTaskId;
@@ -5330,22 +6364,7 @@ function updateTaskTemporalView(options = {}) {
 }
 
 function classifyTaskStage(task, now) {
-  const start = timeToMinutes(task.startTime);
-  const end = timeToMinutes(task.endTime);
-  if (start === null || end === null) return '';
-
-  const current = now.getHours() * 60 + now.getMinutes();
-  if (isAllDayRange(task.startTime, task.endTime)) return 'current';
-  if (start === end) return '';
-
-  if (end < start) {
-    if (current >= start || current < end) return 'current';
-    return 'future';
-  }
-
-  if (current < start) return 'future';
-  if (current >= end) return 'past';
-  return 'current';
+  return classifyTaskAtInstant(task, now);
 }
 
 function taskDurationMinutes(task) {
@@ -5430,21 +6449,18 @@ function dateRangeForProfileStats(rangeType, baseDate) {
 
 function findConflictingTaskIds(taskItems) {
   const conflicted = new Set();
-  const byDate = new Map();
+  const ranges = taskItems.map((task) => ({ task, interval: taskInterval(task) }))
+    .filter((item) => item.interval);
 
-  taskItems.forEach((task) => {
-    const date = normalizeDate(task.date);
-    if (!date) return;
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date).push(task);
-  });
-
-  byDate.forEach((dayTasks) => {
-    const indexes = findConflictingRangeIndexes(dayTasks);
-    indexes.forEach((index) => {
-      if (dayTasks[index] && dayTasks[index].id) conflicted.add(dayTasks[index].id);
-    });
-  });
+  for (let firstIndex = 0; firstIndex < ranges.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < ranges.length; secondIndex += 1) {
+      const first = ranges[firstIndex];
+      const second = ranges[secondIndex];
+      if (first.interval.start >= second.interval.end || second.interval.start >= first.interval.end) continue;
+      if (first.task.id) conflicted.add(first.task.id);
+      if (second.task.id) conflicted.add(second.task.id);
+    }
+  }
 
   return conflicted;
 }
@@ -5454,8 +6470,8 @@ function findConflictingRangeIndexes(items) {
   const ranges = items.map((item, index) => ({
     index,
     intervals: item.startTime || item.endTime
-      ? rangeToComparableIntervals(item.startTime, item.endTime)
-      : inputRangeToComparableIntervals(item.timeRange)
+      ? rangeToStartDayInterval(item.startTime, item.endTime)
+      : inputRangeToStartDayInterval(item.timeRange)
   })).filter((item) => item.intervals.length > 0);
 
   for (let firstIndex = 0; firstIndex < ranges.length; firstIndex += 1) {
@@ -5786,7 +6802,7 @@ function renderPendingMediaItems() {
   pendingMediaItems.filter((item) => !item.removed).forEach((item) => {
     const row = document.createElement('div');
     row.className = 'pending-media-row';
-    row.appendChild(createMediaThumbElement(item, { interactive: false }));
+    row.appendChild(createMediaThumbElement(item, { interactive: true, pending: true }));
 
     const detail = document.createElement('div');
     detail.className = 'pending-media-detail';
@@ -5808,11 +6824,7 @@ function renderPendingMediaItems() {
     remove.className = 'icon-button media-remove-button';
     remove.textContent = '×';
     remove.setAttribute('aria-label', `移除 ${item.originalName}`);
-    remove.addEventListener('click', () => {
-      item.removed = true;
-      renderPendingMediaItems();
-      if (confirmMediaUploadButton) confirmMediaUploadButton.disabled = pendingMediaItems.every((current) => current.removed);
-    });
+    remove.addEventListener('click', () => removePendingMediaItem(item.id));
     row.append(detail, remove);
     mediaUploadPreviewList.appendChild(row);
   });
@@ -5858,6 +6870,14 @@ function mediaKindLabel(kind) {
   return '图片';
 }
 
+function removePendingMediaItem(mediaId) {
+  const item = pendingMediaItems.find((current) => current.id === mediaId);
+  if (!item) return;
+  item.removed = true;
+  renderPendingMediaItems();
+  if (confirmMediaUploadButton) confirmMediaUploadButton.disabled = pendingMediaItems.every((current) => current.removed);
+}
+
 function createMediaThumbElement(media, options = {}) {
   const interactive = options.interactive !== false;
   const element = interactive ? document.createElement('button') : document.createElement('div');
@@ -5865,7 +6885,7 @@ function createMediaThumbElement(media, options = {}) {
   if (interactive) {
     element.type = 'button';
     element.title = `查看 ${media.originalName || '附件'}`;
-    element.addEventListener('click', () => void openMediaViewModal(media));
+    element.addEventListener('click', () => void openMediaViewModal(media, { pending: Boolean(options.pending) }));
   }
   const image = document.createElement('img');
   image.alt = media.originalName || mediaKindLabel(media.kind);
@@ -5896,10 +6916,11 @@ async function mediaFileUrl(relativePath, mediaRoot = '') {
   return url;
 }
 
-async function openMediaViewModal(media) {
-  mediaViewTitle.textContent = media.originalName || '查看内容';
+async function openMediaViewModal(media, options = {}) {
+  const isPending = Boolean(options.pending);
+  mediaViewTitle.textContent = clean(media.annotation) || mediaKindLabel(media.kind);
   mediaViewContent.replaceChildren();
-  if (media.kind === 'live' && window.whbr && window.whbr.media && window.whbr.media.repairLive) {
+  if (!isPending && media.kind === 'live' && window.whbr && window.whbr.media && window.whbr.media.repairLive) {
     const repair = await window.whbr.media.repairLive(media);
     if (repair && repair.ok && repair.repaired) mediaUrlCache.clear();
   }
@@ -5969,10 +6990,28 @@ async function openMediaViewModal(media) {
     image.alt = media.originalName || '图片附件';
     mediaViewContent.appendChild(image);
   }
+  if (isPending) {
+    const pendingActions = document.createElement('div');
+    pendingActions.className = 'media-view-pending-actions';
+    const hint = document.createElement('span');
+    hint.textContent = '这是待保存内容；确认前仍可移除。';
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'danger-button';
+    removeButton.textContent = '移除这项内容';
+    removeButton.addEventListener('click', () => {
+      removePendingMediaItem(media.id);
+      void closeMediaViewModal();
+    });
+    pendingActions.append(hint, removeButton);
+    mediaViewContent.appendChild(pendingActions);
+    mediaViewModal.classList.remove('hidden');
+    return;
+  }
   const annotationField = document.createElement('label');
   annotationField.className = 'media-annotation-field';
   const annotationLabel = document.createElement('span');
-  annotationLabel.textContent = '文字注释（点击空白处自动保存）';
+  annotationLabel.textContent = '文字注释';
   const annotation = document.createElement('textarea');
   annotation.className = 'media-view-annotation';
   annotation.maxLength = 1000;
@@ -5980,15 +7019,28 @@ async function openMediaViewModal(media) {
   annotation.value = media.annotation || '';
   const annotationStatus = document.createElement('small');
   annotationStatus.className = 'media-annotation-save-state';
+  const annotationHeader = document.createElement('div');
+  annotationHeader.className = 'media-annotation-header';
   let savedAnnotation = annotation.value;
+  const commitAnnotation = () => saveMediaAnnotation(media, annotation, annotationStatus, () => savedAnnotation, (value) => {
+    savedAnnotation = value;
+    activeMediaAnnotationDirty = false;
+  });
+  activeMediaAnnotationCommit = commitAnnotation;
+  activeMediaAnnotationDirty = false;
   annotation.addEventListener('focus', () => {
     activeMediaAnnotationEditor = annotation;
   });
   annotation.addEventListener('blur', () => {
     if (activeMediaAnnotationEditor === annotation) activeMediaAnnotationEditor = null;
-    void saveMediaAnnotation(media, annotation, annotationStatus, () => savedAnnotation, (value) => { savedAnnotation = value; });
+    void commitAnnotation();
   });
-  annotationField.append(annotationLabel, annotation, annotationStatus);
+  annotation.addEventListener('input', () => {
+    activeMediaAnnotationDirty = annotation.value.trim().slice(0, 1000) !== savedAnnotation;
+    annotationStatus.textContent = activeMediaAnnotationDirty ? '未保存' : '已更新';
+  });
+  annotationHeader.append(annotationLabel, annotationStatus);
+  annotationField.append(annotationHeader, annotation);
   mediaViewContent.appendChild(annotationField);
   mediaViewModal.classList.remove('hidden');
 }
@@ -6004,7 +7056,7 @@ async function saveMediaAnnotation(media, input, status, getSavedAnnotation, set
     if (!updated) throw new Error('没有找到对应附件。');
     media.annotation = annotation;
     setSavedAnnotation(annotation);
-    status.textContent = '已保存';
+    status.textContent = '已更新';
   } catch (error) {
     status.textContent = `保存失败：${error.message || '未知错误'}`;
   } finally {
@@ -6030,12 +7082,27 @@ async function updateMediaAnnotation(mediaId, annotation) {
   return true;
 }
 
-function closeMediaViewModal() {
-  if (!mediaViewModal) return;
+async function closeMediaViewModal() {
+  if (!mediaViewModal) return false;
+  if (activeMediaAnnotationDirty) {
+    const response = await window.whbr.showMessageBox({
+      type: 'question',
+      title: '保存文字注释？',
+      message: '文字注释有尚未保存的修改。',
+      buttons: ['保存并关闭', '不保存', '取消'],
+      defaultId: 0,
+      cancelId: 2
+    });
+    if (!response || response.response === 2) return false;
+    if (response.response === 0 && activeMediaAnnotationCommit) await activeMediaAnnotationCommit();
+  }
   if (activeMediaAnnotationEditor) activeMediaAnnotationEditor.blur();
   activeMediaAnnotationEditor = null;
+  activeMediaAnnotationCommit = null;
+  activeMediaAnnotationDirty = false;
   mediaViewModal.classList.add('hidden');
   mediaViewContent.replaceChildren();
+  return true;
 }
 
 function renderSelectedJournal() {
@@ -6219,6 +7286,14 @@ function renderJournalView(journal, targetDate, fallbackTitle) {
   const tagBadges = journal ? createJournalTagBadges(journalTagIds(journal)) : null;
   if (tagBadges) journalViewTitle.appendChild(tagBadges);
   journalViewContent.innerHTML = '';
+  const layout = document.createElement('div');
+  layout.className = 'journal-view-layout';
+  const mainPanel = document.createElement('div');
+  mainPanel.className = 'journal-view-main';
+  const mediaPanel = document.createElement('aside');
+  mediaPanel.className = 'journal-view-media';
+  layout.append(mainPanel, mediaPanel);
+  journalViewContent.appendChild(layout);
 
   const journalSection = document.createElement('section');
   const journalHeading = document.createElement('h3');
@@ -6227,31 +7302,15 @@ function renderJournalView(journal, targetDate, fallbackTitle) {
   const journalContentText = journal && journal.content ? journal.content : '这一天还没有生活记录。';
   journalText.textContent = journalContentText;
   journalSection.append(journalHeading, journalText);
-  if (journalContentText.length > 140) {
-    journalText.classList.add('is-collapsed');
-    const expandButton = document.createElement('button');
-    expandButton.type = 'button';
-    expandButton.className = 'journal-text-expand';
-    expandButton.textContent = '展开';
-    expandButton.addEventListener('click', () => {
-      const expanded = journalText.classList.toggle('is-collapsed');
-      expandButton.textContent = expanded ? '展开' : '收起';
-    });
-    journalSection.appendChild(expandButton);
-  }
-  journalViewContent.appendChild(journalSection);
+  mainPanel.appendChild(journalSection);
 
   const taskSection = document.createElement('section');
   const taskHeading = document.createElement('h3');
-  taskHeading.textContent = '任务完成情况';
+  taskHeading.textContent = '异常与复盘';
   taskSection.appendChild(taskHeading);
 
-  const tasksWithFeedback = dayTasks.filter((task) => hasTaskStatusFeedback(task) || clean(task.details));
-  if (tasksWithFeedback.length === 0) {
-    const empty = document.createElement('p');
-    empty.textContent = '这一天还没有确认任务完成情况。';
-    taskSection.appendChild(empty);
-  } else {
+  const tasksWithFeedback = dayTasks.filter((task) => clean(task.details) || ['未完成', '部分完成'].includes(normalizeTaskStatus(task.status)));
+  if (tasksWithFeedback.length > 0) {
     tasksWithFeedback.forEach((task) => {
       const item = document.createElement('div');
       item.className = 'journal-task-detail';
@@ -6263,7 +7322,7 @@ function renderJournalView(journal, targetDate, fallbackTitle) {
     });
   }
 
-  journalViewContent.appendChild(taskSection);
+  if (tasksWithFeedback.length > 0) mainPanel.appendChild(taskSection);
 
   const media = normalizeJournalMedia(journal && journal.media);
   if (media.length > 0) {
@@ -6273,9 +7332,18 @@ function renderJournalView(journal, targetDate, fallbackTitle) {
     mediaHeading.textContent = '照片与视频';
     const mediaActions = document.createElement('div');
     mediaActions.className = 'journal-media-actions';
+    const managing = journalMediaManageIdentity === journalIdentity(journal);
     const mediaHint = document.createElement('p');
     mediaHint.className = 'journal-media-selection-hint';
-    mediaHint.textContent = '勾选附件后可删除一个或多个；点击缩略图可查看内容。';
+    mediaHint.textContent = managing ? '选择要删除的附件，然后确认删除或取消。' : '点击缩略图可放大查看或播放。';
+    const manageButton = document.createElement('button');
+    manageButton.type = 'button';
+    manageButton.className = 'secondary-button';
+    manageButton.textContent = managing ? '取消管理' : '管理照片与视频';
+    manageButton.addEventListener('click', () => {
+      journalMediaManageIdentity = managing ? '' : journalIdentity(journal);
+      renderJournalView(journal, targetDate, fallbackTitle);
+    });
     const deleteSelectedButton = document.createElement('button');
     deleteSelectedButton.type = 'button';
     deleteSelectedButton.className = 'danger-button journal-media-delete-button';
@@ -6291,19 +7359,22 @@ function renderJournalView(journal, targetDate, fallbackTitle) {
     media.forEach((item) => {
       const card = document.createElement('div');
       card.className = 'journal-media-selection';
-      const selectionLabel = document.createElement('label');
-      selectionLabel.className = 'journal-media-selection-check';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) selectedIds.add(item.id);
-        else selectedIds.delete(item.id);
-        updateDeleteButton();
-      });
-      const selectionText = document.createElement('span');
-      selectionText.textContent = '选择';
-      selectionLabel.append(checkbox, selectionText);
-      card.append(selectionLabel, createMediaThumbElement(item));
+      if (managing) {
+        const selectionLabel = document.createElement('label');
+        selectionLabel.className = 'journal-media-selection-check';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) selectedIds.add(item.id);
+          else selectedIds.delete(item.id);
+          updateDeleteButton();
+        });
+        const selectionText = document.createElement('span');
+        selectionText.textContent = '选择';
+        selectionLabel.append(checkbox, selectionText);
+        card.append(selectionLabel);
+      }
+      card.appendChild(createMediaThumbElement(item));
       gallery.appendChild(card);
     });
     deleteSelectedButton.addEventListener('click', () => void deleteJournalMediaItems(
@@ -6314,9 +7385,10 @@ function renderJournalView(journal, targetDate, fallbackTitle) {
       selectedIds,
       deleteSelectedButton
     ));
-    mediaActions.append(mediaHint, deleteSelectedButton);
+    mediaActions.append(mediaHint, manageButton);
+    if (managing) mediaActions.appendChild(deleteSelectedButton);
     mediaSection.append(mediaHeading, mediaActions, gallery);
-    journalViewContent.appendChild(mediaSection);
+    mediaPanel.appendChild(mediaSection);
   }
   journalViewModal.classList.remove('hidden');
 }
@@ -6454,10 +7526,6 @@ function isRenderableTask(task) {
   return /[\u4e00-\u9fa5A-Za-z]/.test(title);
 }
 
-function hasTaskStatusFeedback(task) {
-  return normalizeTaskStatus(task && task.status) !== '未评价';
-}
-
 function taskStatusLabel(status) {
   const normalized = normalizeTaskStatus(status);
   if (normalized === '已完成') return '完成';
@@ -6494,7 +7562,7 @@ async function saveTaskEdit(event) {
 }
 
 function statusClass(status) {
-  if (status === '已完成') return 'done';
+  if (status === '已完成' || status === '推定完成') return 'done';
   if (status === '部分完成') return 'partial';
   if (status === '未完成') return 'missed';
   return 'pending';
@@ -6512,6 +7580,7 @@ function defaultProfile() {
     journalTags: defaultJournalTags(),
     taskCategories: cloneDefaultTaskCategories(),
     taskTemplates: [],
+    autoPlanning: normalizeAutoPlanning({}, []),
     shortcuts: { ...DEFAULT_SHORTCUTS },
     defaultsVersion: '0.2.0'
   };
@@ -6522,20 +7591,71 @@ function normalizedProfile() {
     timeMode,
     customClockBaseTimestamp,
     customClockStartedAt,
+    dayBoundaryTime,
     ...systemTimeProfile
   } = profile || {};
+  const categories = normalizeRawTaskCategories(systemTimeProfile.taskCategories);
+  const templates = normalizeTaskTemplates(systemTimeProfile.taskTemplates, categories);
+  const autoPlanning = normalizeAutoPlanning(systemTimeProfile.autoPlanning, templates.map((template) => template.id));
+  const synchronizedTemplates = templates.map((template) => {
+    const configuredWeekdays = WEEKDAY_KEYS.filter((key) => autoPlanning.weekdayTemplateIds[key] === template.id);
+    return configuredWeekdays.length > 0 ? { ...template, weekdays: configuredWeekdays } : template;
+  });
 
   return {
     ...defaultProfile(),
     ...systemTimeProfile,
     journalTags: normalizeJournalTags(systemTimeProfile.journalTags),
     shortcuts: normalizeShortcutSettings(systemTimeProfile.shortcuts),
-    taskCategories: normalizeRawTaskCategories(systemTimeProfile.taskCategories),
-    taskTemplates: normalizeTaskTemplates(
-      systemTimeProfile.taskTemplates,
-      normalizeRawTaskCategories(systemTimeProfile.taskCategories)
-    )
+    taskCategories: categories,
+    taskTemplates: synchronizedTemplates,
+    autoPlanning
   };
+}
+
+function normalizeTaskTemplateItems(value, categories = taskCategories()) {
+  if (!Array.isArray(value)) return [];
+  return value.map((task) => {
+    const title = clean(task && task.title);
+    const startTime = normalizeTime(task && task.startTime);
+    const endTime = normalizeTime(task && task.endTime);
+    if (!title || timeToMinutes(startTime) === null || timeToMinutes(endTime) === null) return null;
+    const typeId = resolveTaskCategoryId(task && task.typeId, categories, task && task.type);
+    const category = categories.find((item) => item.id === typeId);
+    return {
+      startTime,
+      endTime,
+      title,
+      planDetails: clean(task && task.planDetails),
+      typeId,
+      type: category ? category.name : clean(task && task.type)
+    };
+  }).filter(Boolean);
+}
+
+function normalizeTemplateWeekdays(value) {
+  if (!Array.isArray(value)) return [];
+  const requested = new Set(value.map((item) => String(item)).filter((item) => WEEKDAY_KEYS.includes(item)));
+  return WEEKDAY_KEYS.filter((key) => requested.has(key));
+}
+
+function formatTemplateWeekdays(value) {
+  const weekdays = normalizeTemplateWeekdays(value);
+  if (weekdays.length === 0) return '不限星期';
+  if (weekdays.join(',') === '1,2,3,4,5') return '周一至周五';
+  if (weekdays.join(',') === '6,0') return '周末';
+  if (weekdays.length === 7) return '每天';
+  const names = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 0: '周日' };
+  return weekdays.map((weekday) => names[weekday]).join('、');
+}
+
+function suggestedTaskTemplateName(value) {
+  const weekdays = normalizeTemplateWeekdays(value);
+  if (weekdays.length === 0) return '';
+  if (weekdays.join(',') === '1,2,3,4,5') return '工作日安排';
+  if (weekdays.join(',') === '6,0') return '周末安排';
+  if (weekdays.length === 7) return '每日安排';
+  return `${formatTemplateWeekdays(weekdays)}安排`;
 }
 
 function normalizeTaskTemplates(value, categories = taskCategories()) {
@@ -6544,21 +7664,7 @@ function normalizeTaskTemplates(value, categories = taskCategories()) {
   return value.map((template, templateIndex) => {
     if (!template || typeof template !== 'object') return null;
     const name = clean(template.name).slice(0, 40);
-    const items = (Array.isArray(template.items) ? template.items : []).map((task) => {
-      const title = clean(task && task.title);
-      const startTime = normalizeTime(task && task.startTime);
-      const endTime = normalizeTime(task && task.endTime);
-      if (!title || timeToMinutes(startTime) === null || timeToMinutes(endTime) === null) return null;
-      const typeId = resolveTaskCategoryId(task && task.typeId, categories, task && task.type);
-      const category = categories.find((item) => item.id === typeId);
-      return {
-        startTime,
-        endTime,
-        title,
-        typeId,
-        type: category ? category.name : clean(task && task.type)
-      };
-    }).filter(Boolean);
+    const items = normalizeTaskTemplateItems(template.items, categories);
     if (!name || items.length === 0) return null;
 
     const requestedId = clean(template.id);
@@ -6573,6 +7679,7 @@ function normalizeTaskTemplates(value, categories = taskCategories()) {
       id,
       name,
       createdAt: clean(template.createdAt),
+      weekdays: normalizeTemplateWeekdays(template.weekdays),
       items
     };
   }).filter(Boolean);
@@ -7241,21 +8348,18 @@ async function initializeAppData() {
     const migratedProfile = migrateProfileDefaults(profile);
     profile = migratedProfile.profile;
     const migratedTaskCategories = normalizeTaskCategoryAssignments();
-    const migratedTasks = normalizeTaskDayBoundaries();
     journals = normalizeJournalCollection(result.data.journals || []);
     storagePaths = result.paths || storagePaths;
     setDateInputValue(journalViewDate, latestJournalDate() || journalDate.value || formatLocalDate(new Date()));
-    populateJournalTagSelects();
-    renderJournalTagSettings();
-    renderTaskCategorySettings();
     renderShortcutSettings();
     await migrateLegacyLocalStorageIfNeeded();
-    if (migratedProfile.changed || migratedTaskCategories.changed || migratedTasks.changed) await saveState();
+    if (migratedProfile.changed || migratedTaskCategories.changed) await saveState();
     updateStoragePathView();
-    renderAll();
-    if (pages.tasks.classList.contains('active')) {
-      renderTasks({ scrollToCurrent: true, forceScroll: true });
-    }
+    renderAll({
+      taskRenderOptions: pages.tasks.classList.contains('active')
+        ? { scrollToCurrent: true, forceScroll: true }
+        : {}
+    });
     updateJournalFilterControls();
   } catch (error) {
     setStatus(`加载数据失败：${error.message}`, '');
@@ -7308,7 +8412,15 @@ function migrateProfileDefaults(profileData) {
     migrated.taskTemplates = normalizedTemplates;
     changed = true;
   }
-  ['focusLength', 'breakReminder', 'classDuration', 'classBreakLength', 'workFocusLength', 'workBreakLength'].forEach((field) => {
+  const normalizedAutoPlanning = normalizeAutoPlanning(
+    migrated.autoPlanning,
+    normalizedTemplates.map((template) => template.id)
+  );
+  if (JSON.stringify(migrated.autoPlanning || {}) !== JSON.stringify(normalizedAutoPlanning)) {
+    migrated.autoPlanning = normalizedAutoPlanning;
+    changed = true;
+  }
+  ['focusLength', 'breakReminder', 'classDuration', 'classBreakLength', 'workFocusLength', 'workBreakLength', 'dayBoundaryTime'].forEach((field) => {
     if (!Object.prototype.hasOwnProperty.call(migrated, field)) return;
     delete migrated[field];
     changed = true;
@@ -7444,6 +8556,7 @@ async function deleteJournalMediaItems(journal, targetDate, fallbackTitle, media
   mediaUrlCache.clear();
   await saveState();
   renderJournalList();
+  journalMediaManageIdentity = '';
   if (updatedJournal) renderJournalView(updatedJournal, targetDate, fallbackTitle);
   else closeJournalViewModal();
   setStatus(`已删除 ${selectedMedia.length} 个附件。`, 'hidden');
@@ -7769,11 +8882,9 @@ function clean(value) {
 }
 
 async function startApp() {
-  await applyAppIcon();
-  await applyAppVersion();
+  void applyAppIcon();
+  void applyAppVersion();
   void refreshUpdateStatus();
-  void refreshAsrModelStatus();
-  void refreshAudioInputDevices();
   if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
     navigator.mediaDevices.addEventListener('devicechange', () => {
       if (!microphoneTestRecording && !asrTestRecording) void refreshAudioInputDevices();
@@ -7792,6 +8903,13 @@ async function startApp() {
   await initializeAppData();
   await refreshSystemTime();
   setInterval(refreshSystemTime, 1000);
+
+  // These status probes are useful in Settings, but they do not need to
+  // compete with the first task-page render and the initial data load.
+  setTimeout(() => {
+    void refreshAsrModelStatus();
+    void refreshAudioInputDevices();
+  }, 500);
 }
 
 async function applyAppIcon() {

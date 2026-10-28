@@ -730,17 +730,24 @@ async function fileExists(filePath) {
 async function readMonthlyDataFiles(filePaths) {
   const combined = createDefaultData();
 
-  for (const filePath of filePaths) {
+  const monthlyShards = await Promise.all(filePaths.map(async (filePath) => {
     try {
       const text = await fs.readFile(filePath, 'utf8');
-      const data = normalizeData(JSON.parse(text));
-      combined.tasks.push(...data.tasks);
-      combined.journals.push(...data.journals);
-      combined.profile = { ...combined.profile, ...data.profile };
-      combined.updatedAt = data.updatedAt || combined.updatedAt;
+      return normalizeData(JSON.parse(text));
     } catch (error) {
       // Ignore unreadable monthly shards so one damaged month does not block startup.
+      return null;
     }
+  }));
+
+  // Promise.all preserves filePaths order, so profile precedence remains the
+  // same as the former sequential reader while disk waits can overlap.
+  for (const data of monthlyShards) {
+    if (!data) continue;
+    combined.tasks.push(...data.tasks);
+    combined.journals.push(...data.journals);
+    combined.profile = { ...combined.profile, ...data.profile };
+    combined.updatedAt = data.updatedAt || combined.updatedAt;
   }
 
   combined.tasks = dedupeById(combined.tasks);

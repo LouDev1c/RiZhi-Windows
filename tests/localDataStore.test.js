@@ -37,7 +37,15 @@ const {
 
     const data = {
       version: 2,
-      tasks: [{ id: 'task-1', date: '2026-09-26', startTime: '09:00', endTime: '10:00', title: '测试任务' }],
+      tasks: [{
+        id: 'task-1',
+        date: '2026-09-26',
+        startTime: '23:00',
+        endTime: '01:30',
+        title: '测试任务',
+        timeModel: 'start-date-v1',
+        statusPolicy: 'auto-after-end'
+      }],
       journals: [{
         id: 'journal-1',
         date: '2026-09-26',
@@ -50,6 +58,10 @@ const {
     };
     await saveData(app, data);
     const savedMonth = JSON.parse(await fs.readFile(path.join(initialPaths.dataDirectory, 'rizhi-data-2026-09.json'), 'utf8'));
+    assert.equal(savedMonth.tasks.length, 1);
+    assert.equal(savedMonth.tasks[0].endTime, '01:30');
+    assert.equal(savedMonth.tasks[0].timeModel, 'start-date-v1');
+    assert.equal(savedMonth.tasks[0].statusPolicy, 'auto-after-end');
     assert.deepEqual(savedMonth.journals[0].tagIds, ['legacy-3', 'legacy-5']);
     assert.equal(Object.hasOwn(savedMonth.journals[0], 'tagId'), false);
 
@@ -63,6 +75,8 @@ const {
     assert.equal(dataMigration.paths.mediaDirectory, migratedMediaRoot);
     assert.equal(dataMigration.data.journals[0].media[0].mediaRoot, migratedMediaRoot);
     const migratedMonth = JSON.parse(await fs.readFile(path.join(nextStorageRoot, 'rizhi-data-2026-09.json'), 'utf8'));
+    assert.equal(migratedMonth.tasks.length, 1);
+    assert.equal(migratedMonth.tasks[0].timeModel, 'start-date-v1');
     assert.deepEqual(migratedMonth.journals[0].tagIds, ['legacy-3', 'legacy-5']);
     assert.equal(Object.hasOwn(migratedMonth.journals[0], 'tagId'), false);
     assert.equal(await fs.readFile(path.join(migratedMediaRoot, ...mediaRelativePath.split('/')), 'utf8'), 'media-one');

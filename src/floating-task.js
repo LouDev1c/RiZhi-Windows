@@ -1,7 +1,6 @@
 const bubble = document.querySelector('#bubble');
 const stateText = document.querySelector('#stateText');
-const topmostButton = document.querySelector('#topmostButton');
-const dockRevealButton = document.querySelector('#dockRevealButton');
+const interactionHint = document.querySelector('#interactionHint');
 const taskTitle = document.querySelector('#taskTitle');
 const taskTime = document.querySelector('#taskTime');
 const countdownLabel = document.querySelector('#countdownLabel');
@@ -15,6 +14,9 @@ function render(payload = {}) {
   bubble.classList.toggle('is-idle', !active);
   bubble.classList.toggle('is-break', payload.state === 'break');
   bubble.classList.toggle('has-countdown', Boolean(payload.countdown));
+  const isInteractionUnlocked = Boolean(payload.interactionUnlocked);
+  bubble.classList.toggle('is-unlocked', isInteractionUnlocked);
+  bubble.classList.toggle('is-hovering', Boolean(payload.pointerHovered));
   bubble.classList.toggle('is-docked', Boolean(payload.docked));
   ['left', 'right', 'top', 'bottom'].forEach((edge) => {
     bubble.classList.toggle(`dock-${edge}`, Boolean(payload.docked) && payload.dockEdge === edge);
@@ -25,11 +27,8 @@ function render(payload = {}) {
   countdownLabel.textContent = payload.countdownLabel || '剩余时间';
   countdown.textContent = payload.countdown || '--:--';
   taskDetails.textContent = payload.details || (active ? '暂未填写事前计划或备注' : '最小化时会自动显示当前进行的任务。');
-  const isTopmost = payload.alwaysOnTop !== false;
-  topmostButton.classList.toggle('is-active', isTopmost);
-  topmostButton.setAttribute('aria-pressed', String(isTopmost));
-  topmostButton.textContent = isTopmost ? '置顶中' : '置顶';
-  topmostButton.title = isTopmost ? '取消显示在顶层' : '显示在顶层';
+  interactionHint.textContent = isInteractionUnlocked ? '拖动中 · 松开恢复穿透' : 'Ctrl + Alt + 左键拖动';
+  bubble.title = isInteractionUnlocked ? '正在移动：松开 Ctrl、Alt 和左键后恢复点击穿透' : '点击可穿透；按住 Ctrl 和 Alt 后，用左键拖动气泡';
   requestWindowResize();
 }
 
@@ -82,13 +81,3 @@ window.floatingTask.onFlash(({ times = 5 } = {}) => {
   void bubble.offsetWidth;
   bubble.classList.add('is-flashing');
 });
-topmostButton.addEventListener('click', (event) => {
-  event.stopPropagation();
-  window.floatingTask.toggleTopmost();
-});
-dockRevealButton.addEventListener('click', (event) => {
-  event.stopPropagation();
-  window.floatingTask.expand();
-});
-bubble.addEventListener('click', () => window.floatingTask.expand());
-bubble.addEventListener('dblclick', () => window.floatingTask.openMainWindow());

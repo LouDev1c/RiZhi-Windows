@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('whbr', {
   parseTaskText: (text, referenceDate, taskCategories = []) => ipcRenderer.invoke('task:parseText', { text, referenceDate, taskCategories }),
   showMessageBox: (options) => ipcRenderer.invoke('dialog:messageBox', options),
   selectAndParseFile: (options) => ipcRenderer.invoke('file:selectAndParse', options),
+  selectDailyPlanImport: (options) => ipcRenderer.invoke('file:selectDailyPlanImport', options),
   parseFilePath: (filePath) => ipcRenderer.invoke('file:parsePath', filePath),
   loadData: () => ipcRenderer.invoke('data:load'),
   saveData: (data) => ipcRenderer.invoke('data:save', data),

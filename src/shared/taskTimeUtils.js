@@ -94,6 +94,20 @@
     return [[start, end + 1440], [start - 1440, end]];
   }
 
+  function rangeToStartDayInterval(startTime, endTime) {
+    const start = timeToMinutes(startTime);
+    const end = timeToMinutes(endTime);
+    if (start === null || end === null) return [];
+    if (isAllDayRange(startTime, endTime)) return [[0, 24 * 60]];
+    if (start === end) return [];
+    return [[start, end > start ? end : end + 24 * 60]];
+  }
+
+  function inputRangeToStartDayInterval(value) {
+    const timeRange = extractTimeRangeFromInput(value);
+    return timeRange ? rangeToStartDayInterval(timeRange.startTime, timeRange.endTime) : [];
+  }
+
   function inputRangeToComparableIntervals(value) {
     const timeRange = extractTimeRangeFromInput(value);
     return timeRange ? rangeToComparableIntervals(timeRange.startTime, timeRange.endTime) : [];
@@ -117,11 +131,13 @@
     formatClockDigits,
     formatTimeRangeInput,
     inputRangeToComparableIntervals,
+    inputRangeToStartDayInterval,
     isValidClockPart,
     isAllDayRange,
     normalizeTime,
     rangesOverlap,
     rangeToComparableIntervals,
+    rangeToStartDayInterval,
     timeToMinutes
   };
 }));

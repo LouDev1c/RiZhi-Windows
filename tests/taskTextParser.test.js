@@ -7,6 +7,7 @@ const {
   formatClockDigits,
   isAllDayRange,
   rangeToComparableIntervals,
+  rangeToStartDayInterval,
   rangesOverlap
 } = require('../src/shared/taskTimeUtils');
 
@@ -14,6 +15,8 @@ assert.equal(rangesOverlap(rangeToComparableIntervals('09:00', '10:00'), rangeTo
 assert.equal(rangesOverlap(rangeToComparableIntervals('09:00', '10:30'), rangeToComparableIntervals('10:00', '11:00')), true, '真正重叠的任务必须判定为冲突。');
 assert.equal(isAllDayRange('00:00', '00:00'), true, '零点到零点应表示全天任务。');
 assert.equal(rangesOverlap(rangeToComparableIntervals('00:00', '00:00'), rangeToComparableIntervals('09:00', '10:00')), true, '全天任务应与当天任何有时间的任务冲突。');
+assert.equal(rangesOverlap(rangeToStartDayInterval('00:00', '02:00'), rangeToStartDayInterval('23:00', '02:00')), false, '当日凌晨任务不应与当晚开始并延续到次日的任务冲突。');
+assert.equal(rangesOverlap(rangeToStartDayInterval('23:00', '02:00'), rangeToStartDayInterval('23:30', '01:00')), true, '同一开始日期的两个跨日任务重叠时应标记冲突。');
 assert.equal(completeClockInput(''), '00:00');
 assert.equal(completeClockInput('9'), '09:00');
 assert.equal(completeClockInput('09'), '09:00');

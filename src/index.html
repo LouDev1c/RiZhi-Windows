@@ -70,7 +70,7 @@
             <div class="toolbar">
               <div class="toolbar-heading">
                 <h2>当日安排</h2>
-                <p id="taskDurationSummary" class="task-duration-summary"></p>
+                <div id="taskDurationSummary" class="task-duration-summary stats-day-track hidden" role="img" aria-label="当日暂无任务安排"></div>
               </div>
               <div class="toolbar-actions">
                 <label class="compact-date-picker">
@@ -83,8 +83,10 @@
                     </div>
                   </div>
                 </label>
-                <button id="saveTaskTemplateButton" class="secondary-button" type="button">保存为模板</button>
-                <button id="importMoreButton" class="secondary-button">批量创建任务</button>
+                <div id="taskToolbarButtonStack" class="task-toolbar-button-stack is-single">
+                  <button id="createTaskToolbarButton" class="primary-button task-toolbar-stack-button" type="button" title="创建任务" aria-label="创建任务">创建任务</button>
+                  <button id="taskViewToggleButton" class="secondary-button task-toolbar-stack-button task-view-toggle-button hidden" type="button" title="切换到全天视图" aria-label="切换到全天视图">全天视图</button>
+                </div>
               </div>
             </div>
 
@@ -252,6 +254,7 @@
                 <button class="settings-menu-item" type="button" data-settings-panel="updates">版本更新</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="danger">数据删除</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="task-categories">任务分类</button>
+                <button class="settings-menu-item" type="button" data-settings-panel="daily-plan-generation">每日计划生成</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="tags">标签</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="shortcuts">快捷键</button>
                 <button class="settings-menu-item" type="button" data-settings-panel="asr-test">语音识别测试</button>
@@ -377,6 +380,32 @@
                 </div>
               </section>
 
+              <section class="panel settings-daily-plan-generation-panel hidden" data-settings-panel="daily-plan-generation">
+                <h2>每日计划生成</h2>
+                <p class="muted">按星期模板在指定时间生成明日安排。启动时如果发现今天尚未生成，会自动补充；不会覆盖已经生成或手动修改的日期。</p>
+                <section class="auto-planning-panel" aria-labelledby="autoPlanningTitle">
+                  <div class="auto-planning-head">
+                    <div>
+                      <h3 id="autoPlanningTitle">定时生成安排</h3>
+                      <p class="muted">先为每个星期选择模板，再决定每天何时生成下一天的计划。</p>
+                    </div>
+                    <label class="confirm-row auto-planning-toggle">
+                      <input id="autoPlanningEnabled" type="checkbox" />
+                      <span>启用</span>
+                    </label>
+                  </div>
+                  <label class="field compact-field auto-planning-time" for="autoPlanningGenerationTime">
+                    <span>生成明日计划的时间</span>
+                    <input id="autoPlanningGenerationTime" type="time" step="60" value="21:00" />
+                  </label>
+                  <div id="autoPlanningWeekdayGrid" class="auto-planning-weekday-grid"></div>
+                  <div class="auto-planning-actions">
+                    <p id="autoPlanningStatus" class="form-feedback hidden" role="status"></p>
+                    <button id="saveAutoPlanningButton" class="secondary-button" type="button">保存生成设置</button>
+                  </div>
+                </section>
+              </section>
+
               <section class="panel settings-tags-panel hidden" data-settings-panel="tags">
                 <h2>标签</h2>
                 <p class="muted">自定义日子印记的名称和颜色。一天可以选择多个标签，也可以不设置；筛选多个标签时会显示同时包含这些标签的记录。</p>
@@ -386,7 +415,7 @@
 
               <section class="panel settings-shortcuts-panel hidden" data-settings-panel="shortcuts">
                 <h2>快捷键</h2>
-                <p class="muted">快捷键仅在日织处于前台时生效。带有“自定义”的操作可以设置组合键；常用编辑快捷键按系统习惯固定保留。</p>
+                <p class="muted">带有“自定义”的快捷键仅在日织处于前台时生效；气泡拖动组合键可在其它软件前台时使用。常用编辑快捷键按系统习惯固定保留。</p>
                 <div class="shortcut-settings-list">
                   <article class="shortcut-settings-row">
                     <div class="shortcut-setting-description">
@@ -407,6 +436,7 @@
                   <h3 id="fixedShortcutTitle">固定快捷键</h3>
                   <p class="muted">这些常用操作不能修改。</p>
                   <div class="fixed-shortcut-list">
+                    <div class="fixed-shortcut-item"><span>拖动气泡</span><kbd>Ctrl + Alt + 左键</kbd></div>
                     <div class="fixed-shortcut-item"><span>复制</span><kbd>Ctrl+C</kbd></div>
                     <div class="fixed-shortcut-item"><span>粘贴</span><kbd>Ctrl+V</kbd></div>
                     <div class="fixed-shortcut-item"><span>剪切</span><kbd>Ctrl+X</kbd></div>
@@ -541,34 +571,24 @@
       </div>
     </div>
 
-    <div id="importChoiceModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="importChoiceTitle">
-      <div class="modal-card wide-modal">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">批量创建任务</p>
-            <h2 id="importChoiceTitle">选择批量创建方式</h2>
+    <div id="templateMenuModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="templateMenuTitle">
+      <div class="modal-card small-modal">
+        <div class="create-task-topbar">
+          <div class="create-task-title">
+            <p class="eyebrow">每日安排</p>
+            <h2 id="templateMenuTitle">创建任务</h2>
           </div>
-          <button id="closeImportChoiceModalButton" class="icon-button" aria-label="关闭">×</button>
+          <nav class="create-task-action-bar" aria-label="创建任务方式">
+            <button id="createTasksManualButton" class="create-task-action-button" type="button" data-create-task-view="compose">编排任务</button>
+            <button id="reuseTemplateFromMenuButton" class="create-task-action-button" type="button" data-create-task-view="templates">任务模板</button>
+          </nav>
+          <button id="closeTemplateMenuModalButton" class="icon-button" aria-label="关闭">×</button>
         </div>
-
-        <div class="import-choice-grid">
-          <section class="import-choice-card">
-            <h3>课表</h3>
-            <p class="muted">适合一整个学期每周相对固定的课程安排，仅支持表格文件。</p>
-            <div class="import-choice-actions">
-              <button id="manualScheduleButton" class="primary-button" type="button">手动添加课表</button>
-              <button id="fileScheduleButton" class="secondary-button" type="button">导入课表文件</button>
-            </div>
-          </section>
-
-          <section class="import-choice-card">
-            <h3>每日安排</h3>
-            <p class="muted">适合某一天或一段日期内的日常任务规划。</p>
-            <div class="import-choice-actions">
-              <button id="reuseTemplateButton" class="secondary-button" type="button">复用模板</button>
-              <button id="manualDailyPlanButton" class="primary-button" type="button">填写安排内容</button>
-            </div>
-          </section>
+        <div id="createTaskDetailPanel" class="create-task-detail-panel">
+          <div id="createTaskPlaceholder" class="create-task-placeholder">
+            <strong>请选择一种创建方式</strong>
+            <p>编排新的任务安排，或进入任务模板进行查看和新建。</p>
+          </div>
         </div>
       </div>
     </div>
@@ -578,7 +598,7 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">安排模板</p>
-            <h2 id="saveTaskTemplateTitle">保存当日安排为模板</h2>
+            <h2 id="saveTaskTemplateTitle">保存模板</h2>
           </div>
           <button id="closeSaveTaskTemplateModalButton" class="icon-button" aria-label="关闭">×</button>
         </div>
@@ -603,16 +623,21 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">安排模板</p>
-            <h2 id="reuseTemplateTitle">复用模板</h2>
+            <h2 id="reuseTemplateTitle">任务模板</h2>
           </div>
-          <button id="closeReuseTemplateModalButton" class="icon-button" aria-label="关闭">×</button>
+          <div class="modal-header-actions">
+            <button id="createTaskTemplateButton" class="secondary-button" type="button">新建模板</button>
+            <button id="closeReuseTemplateModalButton" class="icon-button" aria-label="关闭">×</button>
+          </div>
         </div>
+
+        <p id="reuseTemplateIntro" class="muted create-task-function-intro">直接创建会把模板添加到任务页当前日期；如需调整内容或日期，请在“编排任务”中导入模板。</p>
 
         <div id="taskTemplateList" class="task-template-list"></div>
         <p id="taskTemplateEmpty" class="muted task-template-empty hidden">尚未保存安排模板。</p>
         <div class="modal-actions task-template-modal-actions">
-          <button id="cancelReuseTemplateButton" class="secondary-button" type="button">取消</button>
-          <button id="confirmReuseTemplateButton" class="primary-button" type="button" disabled>确认复用</button>
+          <button id="cancelReuseTemplateButton" class="secondary-button" type="button">返回</button>
+          <button id="confirmReuseTemplateButton" class="primary-button hidden" type="button" disabled>直接创建</button>
         </div>
       </div>
     </div>
@@ -672,14 +697,22 @@
           <div class="modal-header">
             <div>
               <h2 id="dailyPlanTableTitle">创建任务</h2>
+              <p id="dailyPlanTableIntro" class="muted create-task-function-intro hidden"></p>
             </div>
             <button id="closeDailyPlanVoicePageButton" class="icon-button" aria-label="关闭">×</button>
           </div>
 
-          <div class="daily-plan-date-toolbar">
+          <div id="dailyPlanDateToolbar" class="daily-plan-date-toolbar">
+            <div id="dailyPlanScopeControl" class="daily-plan-scope-control">
+              <span class="daily-plan-control-label">安排范围</span>
+              <div class="daily-plan-scope-options" role="group" aria-label="安排范围">
+                <button id="dailyPlanSpecificDateButton" class="daily-plan-scope-button is-active" type="button" aria-pressed="true">指定日期</button>
+                <button id="dailyPlanWeekdayButton" class="daily-plan-scope-button" type="button" aria-pressed="false">按星期</button>
+              </div>
+            </div>
             <div id="dailyPlanSingleDateRow" class="term-range daily-date-range">
               <label class="field">
-                <span>日期</span>
+                <span class="daily-plan-control-label">安排日期</span>
                 <div class="date-stepper">
                   <input id="dailyPlanDate" type="date" />
                   <div class="date-stepper-buttons" aria-hidden="false">
@@ -689,9 +722,31 @@
                 </div>
               </label>
             </div>
-            <div id="dailyPlanRangeRow" class="term-range daily-date-range hidden" aria-hidden="true">
+            <div id="dailyPlanWeekdayPanel" class="daily-plan-weekday-panel hidden" aria-hidden="true">
+              <div class="daily-plan-weekday-field">
+                <span class="daily-plan-control-label">适用星期</span>
+                <div id="dailyPlanWeekdayOptions" class="daily-plan-weekday-options" role="group" aria-label="选择适用星期">
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="1" aria-pressed="false">一</button>
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="2" aria-pressed="false">二</button>
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="3" aria-pressed="false">三</button>
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="4" aria-pressed="false">四</button>
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="5" aria-pressed="false">五</button>
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="6" aria-pressed="false">六</button>
+                  <button class="daily-plan-weekday-option" type="button" data-weekday="0" aria-pressed="false">日</button>
+                </div>
+              </div>
+              <label id="dailyPlanWeekPeriodField" class="field daily-plan-week-period-field">
+                <span class="daily-plan-control-label">应用周期</span>
+                <select id="dailyPlanWeekPeriod">
+                  <option value="current">本周</option>
+                  <option value="next">下周</option>
+                  <option value="custom">自定义周期</option>
+                </select>
+              </label>
+            </div>
+            <div id="dailyPlanRangeRow" class="term-range daily-date-range daily-plan-custom-range hidden" aria-hidden="true">
               <label class="field">
-                <span>开始日期</span>
+                <span class="daily-plan-control-label">开始日期</span>
                 <div class="date-stepper">
                   <input id="dailyPlanStartDate" type="date" />
                   <div class="date-stepper-buttons" aria-hidden="false">
@@ -701,7 +756,7 @@
                 </div>
               </label>
               <label class="field">
-                <span>结束日期</span>
+                <span class="daily-plan-control-label">结束日期</span>
                 <div class="date-stepper">
                   <input id="dailyPlanEndDate" type="date" />
                   <div class="date-stepper-buttons" aria-hidden="false">
@@ -711,21 +766,24 @@
                 </div>
               </label>
             </div>
-            <label class="daily-plan-multi-day-toggle">
-              <input id="dailyPlanMultiDay" type="checkbox" />
-              <span>多日</span>
-            </label>
-            <button id="openDailyPlanVoicePageButton" class="primary-button daily-plan-voice-entry" type="button">🎤 语音创建任务</button>
+            <div class="daily-plan-entry-actions">
+              <span class="daily-plan-control-label">辅助填入</span>
+              <button id="dailyPlanImportTemplateButton" class="secondary-button daily-plan-import-entry" type="button">导入模板</button>
+              <button id="dailyPlanImportButton" class="secondary-button daily-plan-import-entry" type="button">导入文件</button>
+              <button id="openDailyPlanVoicePageButton" class="secondary-button daily-plan-voice-entry" type="button">语音输入</button>
+            </div>
           </div>
+          <p id="dailyPlanImportNotice" class="form-feedback daily-plan-import-notice hidden" role="status"></p>
 
+        <div class="daily-plan-editor-heading">
+          <h3>任务内容</h3>
+        </div>
         <div class="editable-table-wrap">
           <table class="editable-table daily-table">
             <thead>
               <tr>
-                <th>开始时间</th>
-                <th>结束时间</th>
-                <th>任务</th>
-                <th>具体内容</th>
+                <th>时间</th>
+                <th>任务内容</th>
                 <th>分类</th>
                 <th class="row-action-heading" aria-label="操作"></th>
               </tr>
@@ -736,8 +794,10 @@
 
         <button id="addDailyPlanRowButton" class="add-table-row" type="button" aria-label="新增空白任务条目">+</button>
 
+        <p id="dailyPlanValidationMessage" class="form-error daily-plan-validation-message hidden" role="alert"></p>
         <div class="modal-actions">
           <button id="cancelDailyPlanTableButton" class="secondary-button" type="button">取消</button>
+          <button id="saveDailyPlanAsTemplateButton" class="secondary-button" type="button">保存为模板</button>
           <button id="saveDailyPlanTableButton" class="primary-button" type="button">确定安排</button>
         </div>
         </section>
@@ -774,7 +834,7 @@
     </div>
 
     <div id="journalViewModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="journalViewTitle">
-      <div class="modal-card">
+      <div class="modal-card wide-modal journal-view-modal-card">
         <div class="modal-header">
           <div>
             <p class="eyebrow">每日生活记录</p>
@@ -922,6 +982,8 @@
 
     <script src="./shared/dateUtils.js"></script>
     <script src="./shared/taskTimeUtils.js"></script>
+    <script src="./shared/dailyCycle.js"></script>
+    <script src="./shared/autoPlanning.js"></script>
     <script src="./shared/journalTags.js"></script>
     <script src="./shared/taskCategories.js"></script>
     <script src="./asr/audioCapture.js"></script>

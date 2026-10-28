@@ -7,13 +7,9 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fsSync = require('fs');
 const fs = require('fs/promises');
-const { parseScheduleFile } = require('./src/parsers/scheduleParser');
-const { parseTaskTextList } = require('./src/parsers/taskTextParser');
 const { getStoragePaths, loadData, resetData, saveData, setStorageRoot } = require('./src/storage/localDataStore');
-const { autoUpdater } = require('electron-updater');
 const { createAsrModelManager } = require('./src/asr/modelManager');
 const { createAsrService } = require('./src/asr/asrService');
-const QRCode = require('qrcode');
 const ffmpegStaticPath = require('ffmpeg-static');
 
 const scheduleFileExtensions = ['xlsx', 'xls', 'csv', 'tsv'];
@@ -23,7 +19,6 @@ const appUiIconPath = resolveAppAssetPath('rizhi.svg');
 let mainWindow = null;
 let floatingTaskWindow = null;
 let floatingTaskPayload = null;
-let floatingTaskAlwaysOnTop = true;
 let floatingTaskFlashTimer = null;
 let floatingTaskWindowReady = false;
 let pendingFloatingTaskFlashes = 0;
@@ -31,10 +26,42 @@ let floatingTaskDockEdge = '';
 let floatingTaskDockDisplayId = null;
 let floatingTaskDockTimer = null;
 let floatingTaskPositionIgnoreUntil = 0;
+let floatingTaskMoveAnimationTimer = null;
+let floatingTaskInteractionUnlocked = false;
+let floatingTaskVisualSize = { width: 252, height: 124 };
+let floatingTaskPointerMonitor = null;
+let floatingTaskPointerHovered = false;
+let floatingTaskInputMonitor = null;
+let floatingTaskInputBuffer = '';
+let floatingTaskDragArmed = false;
+let autoUpdater = null;
+let qrCode = null;
 let reminderWindow = null;
 let reminderCloseTimer = null;
 let reminderQueue = [];
 let isReminderShowing = false;
+
+function getAutoUpdater() {
+  if (!autoUpdater) ({ autoUpdater } = require('electron-updater'));
+  return autoUpdater;
+}
+
+function getQrCode() {
+  if (!qrCode) qrCode = require('qrcode');
+  return qrCode;
+}
+
+function getTaskTextParser() {
+  return require('./src/parsers/taskTextParser').parseTaskTextList;
+}
+
+function getDailyPlanImportParser() {
+  return require('./src/parsers/dailyPlanImportParser').parseDailyPlanImport;
+}
+
+function getScheduleFileParser() {
+  return require('./src/parsers/scheduleParser').parseScheduleFile;
+}
 let tray = null;
 let isQuitting = false;
 let isClosePromptShowing = false;
@@ -118,6 +145,7 @@ function setupAutoUpdater() {
     return;
   }
 
+  autoUpdater = getAutoUpdater();
   autoUpdater.autoDownload = false;
 
   autoUpdater.on('checking-for-update', () => {
@@ -272,7 +300,6 @@ function formatVersionLabel(version) {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   createWindow();
-  showFloatingTaskWindow();
   createTray();
   setupAutoUpdater();
 
@@ -288,6 +315,9 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  clearTimeout(floatingTaskMoveAnimationTimer);
+  clearInterval(floatingTaskPointerMonitor);
+  stopFloatingTaskInputMonitor();
   for (const sessionId of mediaUploadSessions.keys()) {
     void closeMediaUploadSession(sessionId, { removeStaging: false });
   }
@@ -374,7 +404,7 @@ function createFloatingTaskWindow() {
     minimizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    alwaysOnTop: floatingTaskAlwaysOnTop,
+    alwaysOnTop: true,
     title: '日织 · 当前任务',
     icon: appIconPath,
     webPreferences: {
@@ -385,40 +415,46 @@ function createFloatingTaskWindow() {
     }
   });
   applyFloatingTaskAlwaysOnTop();
+  setFloatingTaskInteractionUnlocked(false);
+  startFloatingTaskPointerMonitor();
   floatingTaskWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   floatingTaskWindow.loadFile(path.join(__dirname, 'src', 'floating-task.html'));
   floatingTaskWindow.webContents.on('did-finish-load', () => {
     floatingTaskWindowReady = true;
+    startFloatingTaskInputMonitor();
     sendFloatingTaskUpdate();
     sendPendingFloatingTaskFlashes();
   });
   floatingTaskWindow.on('closed', () => {
+    clearTimeout(floatingTaskMoveAnimationTimer);
+    clearInterval(floatingTaskPointerMonitor);
+    floatingTaskMoveAnimationTimer = null;
+    floatingTaskPointerMonitor = null;
+    floatingTaskInteractionUnlocked = false;
+    floatingTaskDragArmed = false;
+    floatingTaskPointerHovered = false;
     floatingTaskWindow = null;
     floatingTaskWindowReady = false;
   });
-  floatingTaskWindow.on('moved', scheduleFloatingTaskDockCheck);
-  floatingTaskWindow.on('focus', () => {
-    // Windows may deliver a click on the narrow dock tab to the native drag region
-    // before the renderer button receives it. Focusing the docked window is therefore
-    // also treated as an explicit request to reveal it.
-    if (floatingTaskDockEdge) expandFloatingTaskWindow();
-  });
-  floatingTaskWindow.on('blur', () => {
-    if (floatingTaskAlwaysOnTop) applyFloatingTaskAlwaysOnTop();
+  floatingTaskWindow.on('moved', () => {
+    if (floatingTaskInteractionUnlocked) return;
+    scheduleFloatingTaskDockCheck();
   });
   return floatingTaskWindow;
 }
 
 function applyFloatingTaskAlwaysOnTop() {
   if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
-  floatingTaskWindow.setAlwaysOnTop(floatingTaskAlwaysOnTop, floatingTaskAlwaysOnTop ? 'screen-saver' : 'normal');
-  if (floatingTaskAlwaysOnTop) floatingTaskWindow.moveTop();
+  floatingTaskWindow.setAlwaysOnTop(true, 'screen-saver');
+  floatingTaskWindow.moveTop();
 }
 
 function showFloatingTaskWindow() {
   if (isQuitting) return;
   const window = createFloatingTaskWindow();
   window.showInactive();
+  floatingTaskDragArmed = false;
+  setFloatingTaskInteractionUnlocked(false);
   applyFloatingTaskAlwaysOnTop();
   sendFloatingTaskUpdate();
 }
@@ -429,12 +465,14 @@ function hideFloatingTaskWindow() {
 }
 
 function scheduleFloatingTaskDockCheck() {
+  if (floatingTaskInteractionUnlocked) return;
   if (Date.now() < floatingTaskPositionIgnoreUntil) return;
   clearTimeout(floatingTaskDockTimer);
   floatingTaskDockTimer = setTimeout(dockFloatingTaskIfNearEdge, 260);
 }
 
 function dockFloatingTaskIfNearEdge() {
+  if (floatingTaskInteractionUnlocked) return;
   if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
   const bounds = floatingTaskWindow.getBounds();
   const display = screen.getDisplayMatching(bounds);
@@ -454,7 +492,8 @@ function dockFloatingTaskIfNearEdge() {
   if (hiddenEdge) {
     floatingTaskDockEdge = hiddenEdge[0];
     floatingTaskDockDisplayId = display.id;
-    setFloatingTaskDockedPosition();
+    setFloatingTaskDockedPosition({ animate: true });
+    setFloatingTaskInteractionUnlocked(false);
     sendFloatingTaskUpdate();
     return;
   }
@@ -473,13 +512,12 @@ function dockFloatingTaskIfNearEdge() {
   if (topGap <= snapDistance) y = area.y;
   else if (bottomGap <= snapDistance) y = areaBottom - bounds.height;
   if (x !== bounds.x || y !== bounds.y) setFloatingTaskPosition(x, y);
+  setFloatingTaskInteractionUnlocked(false);
   sendFloatingTaskUpdate();
 }
 
-function setFloatingTaskDockedPosition() {
-  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed() || !floatingTaskDockEdge) return;
-  const bounds = floatingTaskWindow.getBounds();
-  const display = screen.getAllDisplays().find((item) => item.id === floatingTaskDockDisplayId)
+function getFloatingTaskDockTarget(bounds, edge = floatingTaskDockEdge, displayId = floatingTaskDockDisplayId) {
+  const display = screen.getAllDisplays().find((item) => item.id === displayId)
     || screen.getDisplayMatching(bounds);
   const area = display.workArea;
   const tabSize = 18;
@@ -487,11 +525,18 @@ function setFloatingTaskDockedPosition() {
     x: Math.min(Math.max(bounds.x, area.x), area.x + area.width - bounds.width),
     y: Math.min(Math.max(bounds.y, area.y), area.y + area.height - bounds.height)
   };
-  if (floatingTaskDockEdge === 'left') next.x = area.x - bounds.width + tabSize;
-  if (floatingTaskDockEdge === 'right') next.x = area.x + area.width - tabSize;
-  if (floatingTaskDockEdge === 'top') next.y = area.y - bounds.height + tabSize;
-  if (floatingTaskDockEdge === 'bottom') next.y = area.y + area.height - tabSize;
-  setFloatingTaskPosition(next.x, next.y);
+  if (edge === 'left') next.x = area.x - bounds.width + tabSize;
+  if (edge === 'right') next.x = area.x + area.width - tabSize;
+  if (edge === 'top') next.y = area.y - bounds.height + tabSize;
+  if (edge === 'bottom') next.y = area.y + area.height - tabSize;
+  return next;
+}
+
+function setFloatingTaskDockedPosition({ animate = false } = {}) {
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed() || !floatingTaskDockEdge) return;
+  const bounds = floatingTaskWindow.getBounds();
+  const next = getFloatingTaskDockTarget(bounds);
+  moveFloatingTaskTo(next.x, next.y, { animate });
 }
 
 function expandFloatingTaskWindow({ preserveDock = false } = {}) {
@@ -506,7 +551,7 @@ function expandFloatingTaskWindow({ preserveDock = false } = {}) {
   if (floatingTaskDockEdge === 'right') x = area.x + area.width - bounds.width;
   if (floatingTaskDockEdge === 'top') y = area.y;
   if (floatingTaskDockEdge === 'bottom') y = area.y + area.height - bounds.height;
-  setFloatingTaskPosition(x, y);
+  moveFloatingTaskTo(x, y, { animate: true });
   if (!preserveDock) {
     floatingTaskDockEdge = '';
     floatingTaskDockDisplayId = null;
@@ -514,17 +559,224 @@ function expandFloatingTaskWindow({ preserveDock = false } = {}) {
   sendFloatingTaskUpdate();
 }
 
+function revealFloatingTaskForDrag() {
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed() || !floatingTaskDockEdge) {
+    return floatingTaskWindow && !floatingTaskWindow.isDestroyed()
+      ? floatingTaskWindow.getBounds()
+      : null;
+  }
+  const bounds = floatingTaskWindow.getBounds();
+  const display = screen.getAllDisplays().find((item) => item.id === floatingTaskDockDisplayId)
+    || screen.getDisplayMatching(bounds);
+  const area = display.workArea;
+  let x = bounds.x;
+  let y = bounds.y;
+  if (floatingTaskDockEdge === 'left') x = area.x;
+  if (floatingTaskDockEdge === 'right') x = area.x + area.width - bounds.width;
+  if (floatingTaskDockEdge === 'top') y = area.y;
+  if (floatingTaskDockEdge === 'bottom') y = area.y + area.height - bounds.height;
+
+  // A hidden card must first become fully visible before calculating the drag
+  // offset; otherwise its off-screen portion keeps satisfying the hide rule.
+  floatingTaskDockEdge = '';
+  floatingTaskDockDisplayId = null;
+  floatingTaskPositionIgnoreUntil = Date.now() + 120;
+  floatingTaskWindow.setPosition(Math.round(x), Math.round(y));
+  sendFloatingTaskUpdate();
+  return floatingTaskWindow.getBounds();
+}
+
 function setFloatingTaskPosition(x, y) {
   if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
+  clearTimeout(floatingTaskMoveAnimationTimer);
+  floatingTaskMoveAnimationTimer = null;
   floatingTaskPositionIgnoreUntil = Date.now() + 600;
   floatingTaskWindow.setPosition(Math.round(x), Math.round(y));
+}
+
+function setFloatingTaskInteractionUnlocked(unlocked) {
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
+  floatingTaskInteractionUnlocked = Boolean(unlocked);
+  if (!floatingTaskInteractionUnlocked) floatingTaskDragArmed = false;
+  floatingTaskWindow.setIgnoreMouseEvents(!floatingTaskInteractionUnlocked, {
+    forward: !floatingTaskInteractionUnlocked
+  });
+  sendFloatingTaskUpdate();
+}
+
+function startFloatingTaskInputMonitor() {
+  if (process.platform !== 'win32' || floatingTaskInputMonitor) return;
+
+  // Electron can forward pointer movement through a click-through window, but
+  // it cannot receive mouse-button events there. This tiny local Windows helper
+  // only reports modifier/button state, so we can claim the bubble before the
+  // left click is pressed and let Chromium perform the normal native drag.
+  const script = `
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class RiZhiFloatingTaskInput {
+  [DllImport("user32.dll")]
+  public static extern short GetAsyncKeyState(int virtualKey);
+}
+'@
+while ($true) {
+  $ctrl = (([RiZhiFloatingTaskInput]::GetAsyncKeyState(0x11) -band 0x8000) -ne 0)
+  $alt = (([RiZhiFloatingTaskInput]::GetAsyncKeyState(0x12) -band 0x8000) -ne 0)
+  $left = (([RiZhiFloatingTaskInput]::GetAsyncKeyState(0x01) -band 0x8000) -ne 0)
+  [Console]::Out.WriteLine("{0},{1},{2}" -f [int]$ctrl, [int]$alt, [int]$left)
+  Start-Sleep -Milliseconds 16
+}`;
+  const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const monitor = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'ignore']
+  });
+  floatingTaskInputMonitor = monitor;
+  monitor.stdout.setEncoding('utf8');
+  monitor.stdout.on('data', (chunk) => {
+    floatingTaskInputBuffer += chunk;
+    const lines = floatingTaskInputBuffer.split(/\r?\n/);
+    floatingTaskInputBuffer = lines.pop() || '';
+    for (const line of lines) {
+      const [ctrl, alt, leftButton] = line.trim().split(',').map(Number);
+      if ([ctrl, alt, leftButton].some((value) => !Number.isFinite(value))) continue;
+      handleFloatingTaskInputState(Boolean(ctrl), Boolean(alt), Boolean(leftButton));
+    }
+  });
+  monitor.on('exit', () => {
+    if (floatingTaskInputMonitor === monitor) {
+      floatingTaskInputMonitor = null;
+      floatingTaskInputBuffer = '';
+    }
+  });
+  monitor.on('error', (error) => {
+    if (floatingTaskInputMonitor === monitor) {
+      console.warn('RiZhi: floating-task input monitor unavailable:', error.message);
+      floatingTaskInputMonitor = null;
+      floatingTaskInputBuffer = '';
+    }
+  });
+}
+
+function stopFloatingTaskInputMonitor() {
+  if (!floatingTaskInputMonitor) return;
+  floatingTaskInputMonitor.kill();
+  floatingTaskInputMonitor = null;
+  floatingTaskInputBuffer = '';
+}
+
+function handleFloatingTaskInputState(ctrlDown, altDown, leftButtonDown) {
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
+  const chordDown = ctrlDown && altDown;
+
+  if (!floatingTaskDragArmed) {
+    if (!chordDown || leftButtonDown) return;
+    const point = screen.getCursorScreenPoint();
+    const visualBounds = getFloatingTaskVisualBounds();
+    if (!visualBounds || !isPointInsideBounds(point, visualBounds)) return;
+
+    clearTimeout(floatingTaskDockTimer);
+    clearTimeout(floatingTaskMoveAnimationTimer);
+    revealFloatingTaskForDrag();
+    floatingTaskDragArmed = true;
+    setFloatingTaskInteractionUnlocked(true);
+    applyFloatingTaskAlwaysOnTop();
+    return;
+  }
+
+  // Keep accepting events for the whole native drag even if the modifiers are
+  // released slightly before the left button. Once both parts are up, restore
+  // click-through and then apply the normal edge docking rule.
+  if (chordDown || leftButtonDown) return;
+  floatingTaskDragArmed = false;
+  setFloatingTaskInteractionUnlocked(false);
+  setTimeout(scheduleFloatingTaskDockCheck, 120);
+}
+
+function setFloatingTaskPointerHovered(hovered) {
+  const next = Boolean(hovered);
+  if (floatingTaskPointerHovered === next) return;
+  floatingTaskPointerHovered = next;
+  sendFloatingTaskUpdate();
+}
+
+function isPointInsideBounds(point, bounds) {
+  return point.x >= bounds.x
+    && point.x <= bounds.x + bounds.width
+    && point.y >= bounds.y
+    && point.y <= bounds.y + bounds.height;
+}
+
+function getFloatingTaskVisualBounds() {
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return null;
+  const windowBounds = floatingTaskWindow.getBounds();
+  const contentBounds = floatingTaskWindow.getContentBounds();
+  return {
+    x: contentBounds.x,
+    y: contentBounds.y,
+    // The renderer measures the card itself. Restrict hit testing to that
+    // rectangle rather than any transparent or platform-provided window area.
+    width: Math.min(contentBounds.width, floatingTaskVisualSize.width || windowBounds.width),
+    height: Math.min(contentBounds.height, floatingTaskVisualSize.height || windowBounds.height)
+  };
+}
+
+function startFloatingTaskPointerMonitor() {
+  if (floatingTaskPointerMonitor) return;
+  floatingTaskPointerMonitor = setInterval(() => {
+    if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
+    const point = screen.getCursorScreenPoint();
+    const visualBounds = getFloatingTaskVisualBounds();
+    const isHovering = visualBounds && isPointInsideBounds(point, visualBounds);
+    setFloatingTaskPointerHovered(isHovering);
+  }, 35);
+}
+
+function moveFloatingTaskTo(x, y, { animate = false, onComplete } = {}) {
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
+  if (!animate) {
+    setFloatingTaskPosition(x, y);
+    if (onComplete) onComplete();
+    return;
+  }
+
+  const from = floatingTaskWindow.getBounds();
+  const targetX = Math.round(x);
+  const targetY = Math.round(y);
+  if (from.x === targetX && from.y === targetY) {
+    if (onComplete) onComplete();
+    return;
+  }
+
+  clearTimeout(floatingTaskMoveAnimationTimer);
+  const duration = 260;
+  const startedAt = Date.now();
+  floatingTaskPositionIgnoreUntil = startedAt + duration + 650;
+  const step = () => {
+    if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
+    const progress = Math.min(1, (Date.now() - startedAt) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    floatingTaskWindow.setPosition(
+      Math.round(from.x + (targetX - from.x) * eased),
+      Math.round(from.y + (targetY - from.y) * eased)
+    );
+    if (progress < 1) {
+      floatingTaskMoveAnimationTimer = setTimeout(step, 16);
+      return;
+    }
+    floatingTaskMoveAnimationTimer = null;
+    if (onComplete) onComplete();
+  };
+  step();
 }
 
 function sendFloatingTaskUpdate() {
   if (!floatingTaskWindow || floatingTaskWindow.isDestroyed() || floatingTaskWindow.webContents.isDestroyed()) return;
   floatingTaskWindow.webContents.send('floating-task:update', {
     ...(floatingTaskPayload || {}),
-    alwaysOnTop: floatingTaskAlwaysOnTop,
+    interactionUnlocked: floatingTaskInteractionUnlocked,
+    pointerHovered: floatingTaskPointerHovered,
     docked: Boolean(floatingTaskDockEdge),
     dockEdge: floatingTaskDockEdge
   });
@@ -537,6 +789,7 @@ function flashFloatingTaskWindow() {
   const shouldRedock = Boolean(floatingTaskDockEdge);
   if (shouldRedock) expandFloatingTaskWindow({ preserveDock: true });
   window.showInactive();
+  setFloatingTaskInteractionUnlocked(false);
   applyFloatingTaskAlwaysOnTop();
   sendFloatingTaskUpdate();
   sendPendingFloatingTaskFlashes();
@@ -546,7 +799,7 @@ function flashFloatingTaskWindow() {
   if (shouldRedock) {
     floatingTaskFlashTimer = setTimeout(() => {
       floatingTaskFlashTimer = null;
-      setFloatingTaskDockedPosition();
+      setFloatingTaskDockedPosition({ animate: true });
     }, 6700);
   }
 }
@@ -759,6 +1012,10 @@ ipcMain.on('floating-task:update', (event, payload = {}) => {
     countdown: String(payload.countdown || '').slice(0, 16),
     categoryColor: /^#[0-9a-f]{6}$/i.test(categoryColor) ? categoryColor : '#8b98a0'
   };
+  if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) {
+    showFloatingTaskWindow();
+    return;
+  }
   sendFloatingTaskUpdate();
 });
 
@@ -776,8 +1033,9 @@ ipcMain.on('floating-task:resize', (event, requestedSize = {}) => {
   if (!isFloatingTaskWindowSender(event) || !floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
   const width = Math.max(252, Math.min(252, Math.round(Number(requestedSize.width) || 252)));
   const height = Math.max(124, Math.min(420, Math.round(Number(requestedSize.height) || 124)));
-  const bounds = floatingTaskWindow.getBounds();
-  if (bounds.width === width && bounds.height === height) return;
+  floatingTaskVisualSize = { width, height };
+  const contentBounds = floatingTaskWindow.getContentBounds();
+  if (contentBounds.width === width && contentBounds.height === height) return;
   floatingTaskWindow.setContentSize(width, height);
   if (floatingTaskDockEdge && !floatingTaskFlashTimer) {
     setFloatingTaskDockedPosition();
@@ -790,13 +1048,6 @@ ipcMain.on('floating-task:resize', (event, requestedSize = {}) => {
     Math.min(Math.max(resizedBounds.x, area.x), area.x + area.width - resizedBounds.width),
     Math.min(Math.max(resizedBounds.y, area.y), area.y + area.height - resizedBounds.height)
   );
-});
-
-ipcMain.on('floating-task:toggle-topmost', (event) => {
-  if (!isFloatingTaskWindowSender(event)) return;
-  floatingTaskAlwaysOnTop = !floatingTaskAlwaysOnTop;
-  applyFloatingTaskAlwaysOnTop();
-  sendFloatingTaskUpdate();
 });
 
 ipcMain.on('floating-task:flash', (event) => {
@@ -1034,7 +1285,7 @@ async function startMediaUploadSession(date) {
     candidates,
     loopback
   };
-  session.qrDataUrl = await QRCode.toDataURL(session.uploadUrl, {
+  session.qrDataUrl = await getQrCode().toDataURL(session.uploadUrl, {
     width: 360,
     margin: 2,
     errorCorrectionLevel: 'M',
@@ -1582,7 +1833,7 @@ ipcMain.handle('task:parseText', (event, payload = {}) => {
 
   return {
     ok: true,
-    result: parseTaskTextList(payload.text, {
+    result: getTaskTextParser()(payload.text, {
       referenceDate: payload.referenceDate,
       taskCategories: Array.isArray(payload.taskCategories) ? payload.taskCategories : []
     })
@@ -1689,6 +1940,31 @@ ipcMain.handle('file:selectAndParse', async (_event, options = {}) => {
     filePath,
     fileName: path.basename(filePath),
     fileSize: stat.size
+  };
+});
+
+ipcMain.handle('file:selectDailyPlanImport', async (_event, options = {}) => {
+  const result = await dialog.showOpenDialog(mainWindow || undefined, {
+    title: '导入课表或安排文件',
+    properties: ['openFile'],
+    filters: [
+      { name: '表格文件', extensions: scheduleFileExtensions }
+    ]
+  });
+  if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+
+  const filePath = result.filePaths[0];
+  const stat = await fs.stat(filePath);
+  const parsed = await getDailyPlanImportParser()(filePath, {
+    targetDate: options.targetDate
+  });
+  return {
+    canceled: false,
+    filePath,
+    fileName: path.basename(filePath),
+    fileSize: stat.size,
+    importedAt: new Date().toISOString(),
+    ...parsed
   };
 });
 
@@ -1838,7 +2114,7 @@ async function parseSelectedFile(filePath) {
     importedAt: new Date().toISOString()
   };
 
-  const parseResult = await parseScheduleFile(filePath);
+  const parseResult = await getScheduleFileParser()(filePath);
   return {
     ...basePayload,
     sourceType: 'table',

@@ -11,8 +11,5 @@ contextBridge.exposeInMainWorld('floatingTask', {
     ipcRenderer.on('floating-task:flash', wrappedListener);
     return () => ipcRenderer.removeListener('floating-task:flash', wrappedListener);
   },
-  openMainWindow: () => ipcRenderer.send('floating-task:open-main'),
-  expand: () => ipcRenderer.send('floating-task:expand'),
-  resize: (size) => ipcRenderer.send('floating-task:resize', size),
-  toggleTopmost: () => ipcRenderer.send('floating-task:toggle-topmost')
+  resize: (size) => ipcRenderer.send('floating-task:resize', size)
 });
