@@ -31,7 +31,7 @@
 
 任务、记录、标签、模板和附件默认保存在本机。除检查 GitHub Releases 更新、首次下载离线语音模型以及同一局域网内的手机附件上传外，日常使用不需要把个人记录发送到外部服务。
 
-> 当前发布版本：**1.0.0**。请优先从 [日织官网](https://rizhi-7jb.pages.dev) 下载 Windows 安装包；也可从 [GitHub Releases](https://github.com/LouDev1c/RiZhi-Windows/releases) 获取版本说明与发布文件。
+> 当前发布版本：**1.1.1**。请优先从 [日织官网](https://rizhi-7jb.pages.dev) 下载 Windows 安装包；也可从 [GitHub Releases](https://github.com/LouDev1c/RiZhi-Windows/releases) 获取版本说明与发布文件。
 
 ## 核心能力
 
