@@ -51,8 +51,10 @@ const {
   DEFAULT_GENERATION_TIME,
   WEEKDAY_KEYS,
   datesDueForGeneration,
+  nextGenerationAt,
   normalizeAutoPlanning,
   normalizeGenerationTime,
+  partitionTemplateItemsForDate,
   pruneGeneratedDates,
   templateIdForDate
 } = globalThis.RizhiAutoPlanning;
@@ -88,6 +90,7 @@ const createTaskActionButtons = Array.from(document.querySelectorAll('[data-crea
 const autoPlanningEnabled = document.querySelector('#autoPlanningEnabled');
 const autoPlanningGenerationTime = document.querySelector('#autoPlanningGenerationTime');
 const autoPlanningWeekdayGrid = document.querySelector('#autoPlanningWeekdayGrid');
+const autoPlanningRunSummary = document.querySelector('#autoPlanningRunSummary');
 const autoPlanningStatus = document.querySelector('#autoPlanningStatus');
 const saveAutoPlanningButton = document.querySelector('#saveAutoPlanningButton');
 const saveTaskTemplateModal = document.querySelector('#saveTaskTemplateModal');
@@ -359,7 +362,7 @@ let latestAsrModelStatus = null;
 let latestUpdateStatus = { status: 'idle', version: '', progress: null, error: '' };
 let taskViewMode = 'focus';
 let autoPlanningInFlight = false;
-let lastAutoPlanningMinuteKey = '';
+let autoPlanningTimer = null;
 let microphoneTestCapture = null;
 let microphoneTestUnsubscribe = null;
 let microphoneTestRecording = false;
@@ -2069,7 +2072,6 @@ async function refreshSystemTime() {
   updateTaskTemporalView();
   if (pages.profile.classList.contains('active')) renderProfileStats();
   publishFloatingTask(now);
-  void maybeGenerateScheduledPlans(now);
 }
 
 function publishFloatingTask(now = currentEffectiveNow || new Date()) {
@@ -4037,7 +4039,33 @@ async function saveDailyPlanTable(options = {}) {
     });
   });
 
-  tasks = mergeTasks(tasks, newTasks);
+  const analysis = analyzeTaskBatch(newTasks);
+  const dateLabel = dates.length === 1 ? dates[0] : `${dates[0]} 至 ${dates[dates.length - 1]}`;
+  if (analysis.addedTasks.length === 0) {
+    await window.whbr.showMessageBox({
+      type: 'info',
+      title: '没有需要新增的任务',
+      message: `${dateLabel} 的 ${analysis.duplicateTasks.length} 条编排任务均已存在。`,
+      detail: '没有写入重复任务，你可以返回编排表继续修改。',
+      buttons: ['确定']
+    });
+    return;
+  }
+
+  if (analysis.existingTaskCount > 0 || analysis.duplicateTasks.length > 0 || analysis.conflictingAddedTasks.length > 0) {
+    const response = await window.whbr.showMessageBox({
+      type: 'question',
+      title: '确认批量添加任务',
+      message: `${dateLabel} 已有 ${analysis.existingTaskCount} 条任务。本次编排共 ${analysis.totalCount} 条，其中 ${analysis.duplicateTasks.length} 条重复，实际新增 ${analysis.addedTasks.length} 条。`,
+      detail: taskBatchConflictDetail(analysis),
+      buttons: ['确认新增', '返回修改'],
+      defaultId: 1,
+      cancelId: 1
+    });
+    if (!response || response.response !== 0) return;
+  }
+
+  tasks = [...tasks, ...analysis.addedTasks];
   setDateInputValue(taskDateFilter, dates[0]);
   dates.forEach((date) => activePlanningDates.add(date));
   await saveState();
@@ -4045,9 +4073,10 @@ async function saveDailyPlanTable(options = {}) {
   closeDailyPlanTableModal();
   if (embedded) closeTemplateMenuModal();
   renderAll();
-  setStatus(dates.length === 1
-    ? `已生成 ${newTasks.length} 条当日安排。`
-    : `已生成 ${dates[0]} 至 ${dates[dates.length - 1]} 的 ${newTasks.length} 条安排。`, 'hidden');
+  const conflictText = analysis.conflictingAddedTasks.length > 0
+    ? `，其中 ${analysis.conflictingAddedTasks.length} 条存在时间冲突`
+    : '';
+  setStatus(`已为 ${dateLabel} 新增 ${analysis.addedTasks.length} 条安排，跳过 ${analysis.duplicateTasks.length} 条重复任务${conflictText}。`, 'hidden');
 }
 
 function selectedDailyPlanDates() {
@@ -4720,6 +4749,57 @@ function mergeTasks(currentTasks, importedTasks) {
   return Array.from(taskMap.values());
 }
 
+function analyzeTaskBatch(candidateTasks) {
+  const candidatesByDate = new Map();
+  (Array.isArray(candidateTasks) ? candidateTasks : []).forEach((task) => {
+    const date = normalizeDate(task && task.date);
+    if (!date) return;
+    if (!candidatesByDate.has(date)) candidatesByDate.set(date, []);
+    candidatesByDate.get(date).push(task);
+  });
+
+  const addedTasks = [];
+  const duplicateTasks = [];
+  const existingTaskIds = new Set();
+  candidatesByDate.forEach((dateCandidates, date) => {
+    const existingOwnedTasks = tasks.filter((task) => (
+      isRenderableTask(task) && normalizeDate(task.date) === date
+    ));
+    existingOwnedTasks.forEach((task) => existingTaskIds.add(task.id));
+    const partition = partitionTemplateItemsForDate(existingOwnedTasks, dateCandidates, date);
+    addedTasks.push(...partition.missingItems);
+    duplicateTasks.push(...partition.duplicateItems);
+  });
+
+  let conflictingAddedTasks = [];
+  if (addedTasks.length > 0) {
+    const dates = Array.from(candidatesByDate.keys()).sort();
+    const rangeStart = shiftDate(dates[0], -1);
+    const rangeEnd = shiftDate(dates[dates.length - 1], 1);
+    const relevantExistingTasks = tasks.filter((task) => {
+      const date = normalizeDate(task.date);
+      return isRenderableTask(task) && date && date >= rangeStart && date <= rangeEnd;
+    });
+    const conflictIds = findConflictingTaskIds([...relevantExistingTasks, ...addedTasks]);
+    conflictingAddedTasks = addedTasks.filter((task) => conflictIds.has(task.id));
+  }
+
+  return {
+    totalCount: Array.isArray(candidateTasks) ? candidateTasks.length : 0,
+    existingTaskCount: existingTaskIds.size,
+    addedTasks,
+    duplicateTasks,
+    conflictingAddedTasks
+  };
+}
+
+function taskBatchConflictDetail(analysis) {
+  const conflictCount = analysis.conflictingAddedTasks.length;
+  return conflictCount > 0
+    ? `实际新增的任务中有 ${conflictCount} 条存在时间冲突；添加后会在任务页标红，请继续调整。`
+    : '实际新增的任务未发现时间冲突。';
+}
+
 async function addTaskForSelectedDate() {
   const date = ensureSelectedDate();
   activePlanningDates.add(date);
@@ -4860,6 +4940,42 @@ function renderAutoPlanningSettings() {
     row.append(label, select);
     autoPlanningWeekdayGrid.appendChild(row);
   });
+  renderAutoPlanningRunSummary(config);
+}
+
+function renderAutoPlanningRunSummary(config = configuredAutoPlanning(), now = currentEffectiveNow || new Date()) {
+  if (!autoPlanningRunSummary) return;
+  if (!config.enabled) {
+    autoPlanningRunSummary.textContent = '当前未启用定时生成。';
+    return;
+  }
+
+  const nextRun = nextGenerationAt(config, now);
+  const nextText = nextRun
+    ? `下次检查：${formatClockDate(nextRun)} ${formatClockTime(nextRun)}`
+    : '下次检查时间尚未确定';
+  const latest = Object.entries(config.generatedDates || {})
+    .filter(([, record]) => record && record.generatedAt)
+    .sort((first, second) => String(second[1].generatedAt).localeCompare(String(first[1].generatedAt)))[0];
+
+  if (!latest) {
+    autoPlanningRunSummary.textContent = `${nextText}；尚无生成记录。`;
+    return;
+  }
+
+  const [date, record] = latest;
+  if (record.templateId === 'existing-plan') {
+    autoPlanningRunSummary.textContent = `${nextText}；${date} 曾因已有任务被旧规则跳过，保存设置后会安全补充。`;
+    return;
+  }
+  if (record.templateId === 'cleared-by-user') {
+    autoPlanningRunSummary.textContent = `${nextText}；${date} 已由你手动清空，不会再次自动填充。`;
+    return;
+  }
+
+  const template = taskTemplates().find((item) => item.id === record.templateId);
+  const templateName = template ? `“${template.name}”` : '对应模板';
+  autoPlanningRunSummary.textContent = `${nextText}；最近处理 ${date} 的${templateName}：补充 ${record.addedCount || 0} 条，跳过 ${record.duplicateCount || 0} 条相同任务。`;
 }
 
 function setAutoPlanningStatus(message, isError = false) {
@@ -4896,9 +5012,9 @@ async function saveAutoPlanningSettings() {
   try {
     await saveState();
     renderAutoPlanningSettings();
-    const generated = await maybeGenerateScheduledPlans(currentEffectiveNow || new Date(), { force: true });
-    setAutoPlanningStatus(generated > 0
-      ? `设置已保存，并补充生成了 ${generated} 天的安排。`
+    const result = await maybeGenerateScheduledPlans(currentEffectiveNow || new Date(), { force: true });
+    setAutoPlanningStatus(result.addedTasks > 0
+      ? `设置已保存，并补充了 ${result.addedTasks} 条任务；${result.duplicateTasks} 条相同任务未重复添加。`
       : '每日计划生成设置已保存。');
   } catch (error) {
     profile = previousProfile;
@@ -4906,41 +5022,35 @@ async function saveAutoPlanningSettings() {
     setAutoPlanningStatus(`保存失败：${error.message || String(error)}`, true);
   } finally {
     saveAutoPlanningButton.disabled = false;
+    restartAutoPlanningScheduler();
   }
 }
 
 async function maybeGenerateScheduledPlans(now, options = {}) {
+  const result = { processedDates: 0, addedTasks: 0, duplicateTasks: 0 };
   const config = configuredAutoPlanning();
-  if (!config.enabled || autoPlanningInFlight) return 0;
-  const minuteKey = `${formatLocalDate(now)}-${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  if (!options.force && minuteKey === lastAutoPlanningMinuteKey) return 0;
-  lastAutoPlanningMinuteKey = minuteKey;
+  if (!config.enabled || autoPlanningInFlight) return result;
   autoPlanningInFlight = true;
 
   try {
     const templates = taskTemplates();
     const generatedDates = { ...config.generatedDates };
-    let generatedCount = 0;
     let profileChanged = false;
 
     datesDueForGeneration(config, now).forEach((date) => {
       const templateId = templateIdForDate(config, date);
       const template = templates.find((item) => item.id === templateId);
-      if (!template || generatedDates[date]) return;
+      if (!template) return;
+
+      const previousRecord = generatedDates[date];
+      if (previousRecord && (previousRecord.templateId === template.id || previousRecord.templateId === 'cleared-by-user')) return;
 
       const existingTasks = tasks.filter((task) => normalizeDate(task.date) === date && isRenderableTask(task));
-      if (existingTasks.length > 0) {
-        generatedDates[date] = {
-          templateId: 'existing-plan',
-          generatedAt: now.toISOString()
-        };
-        profileChanged = true;
-        return;
-      }
+      const { missingItems, duplicateItems } = partitionTemplateItemsForDate(existingTasks, template.items, date);
 
       const baseOrder = nextOrderForDate(date);
-      const clones = template.items.map((item, index) => ({
-        id: `auto-plan-${date}-${template.id}-${index}`,
+      const clones = missingItems.map((item, index) => ({
+        id: `auto-plan-${date}-${template.id}-${index}-${now.getTime()}`,
         title: item.title,
         startTime: item.startTime,
         endTime: item.endTime,
@@ -4969,16 +5079,21 @@ async function maybeGenerateScheduledPlans(now, options = {}) {
         order: baseOrder + index * 10,
         isDraft: false
       }));
-      tasks = mergeTasks(tasks, clones);
+      tasks = [...tasks, ...clones];
       generatedDates[date] = {
         templateId: template.id,
-        generatedAt: now.toISOString()
+        generatedAt: now.toISOString(),
+        addedCount: clones.length,
+        duplicateCount: duplicateItems.length,
+        existingTaskCount: existingTasks.length
       };
-      generatedCount += 1;
+      result.processedDates += 1;
+      result.addedTasks += clones.length;
+      result.duplicateTasks += duplicateItems.length;
       profileChanged = true;
     });
 
-    if (!profileChanged) return 0;
+    if (!profileChanged) return result;
     profile = {
       ...normalizedProfile(),
       autoPlanning: {
@@ -4989,15 +5104,35 @@ async function maybeGenerateScheduledPlans(now, options = {}) {
     await saveState();
     if (pages.tasks.classList.contains('active')) renderTasks();
     if (pages.profile.classList.contains('active')) renderProfileStats();
+    renderAutoPlanningRunSummary(configuredAutoPlanning(), now);
     publishFloatingTask(now);
-    return generatedCount;
+    return result;
   } catch (error) {
     if (options.force) throw error;
     setStatus(`自动生成安排失败：${error.message || String(error)}`, 'error', 6000);
-    return 0;
+    return result;
   } finally {
     autoPlanningInFlight = false;
   }
+}
+
+function restartAutoPlanningScheduler() {
+  window.clearTimeout(autoPlanningTimer);
+  autoPlanningTimer = null;
+  const config = configuredAutoPlanning();
+  if (!config.enabled) return;
+
+  const now = new Date();
+  const nextRun = nextGenerationAt(config, now);
+  if (!nextRun) return;
+  const delay = Math.min(2147483647, Math.max(1000, nextRun.getTime() - now.getTime() + 100));
+  autoPlanningTimer = window.setTimeout(async () => {
+    try {
+      await maybeGenerateScheduledPlans(new Date());
+    } finally {
+      restartAutoPlanningScheduler();
+    }
+  }, delay);
 }
 
 function openSaveTaskTemplateModal(items = null, options = {}) {
@@ -5549,16 +5684,53 @@ async function confirmTaskTemplateSelection() {
   if (!template) return;
 
   const targetDate = ensureSelectedDate();
-  const existingTaskCount = tasks.filter((task) => (
-    isRenderableTask(task) && normalizeDate(task.date) === targetDate
-  )).length;
-  if (existingTaskCount > 0) {
+  const baseOrder = nextOrderForDate(targetDate);
+  const timestamp = Date.now();
+  const candidateTasks = template.items.map((task, index) => ({
+    id: `template-reuse-${timestamp}-${index}`,
+    title: task.title,
+    startTime: task.startTime,
+    endTime: task.endTime,
+    date: targetDate,
+    weekday: weekdayFromDate(targetDate),
+    location: '',
+    typeId: task.typeId,
+    type: task.type,
+    planDetails: task.planDetails || '',
+    details: '',
+    status: '未评价',
+    rawText: '',
+    sheetName: '',
+    source: 'task-template',
+    splitParentId: '',
+    timeModel: START_DATE_TIME_MODEL,
+    statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
+    order: baseOrder + index * 10,
+    isDraft: false
+  }));
+  const analysis = analyzeTaskBatch(candidateTasks);
+
+  if (analysis.addedTasks.length === 0) {
+    const response = await window.whbr.showMessageBox({
+      type: 'info',
+      title: '没有需要新增的任务',
+      message: `${targetDate} 已有 ${analysis.existingTaskCount} 条任务；模板中的 ${analysis.duplicateTasks.length} 条任务均已存在。`,
+      detail: '不会重复添加任务。如需调整模板内容或日期，可以转到编排页面。',
+      buttons: ['转到编排', '取消'],
+      defaultId: 1,
+      cancelId: 1
+    });
+    if (response && response.response === 0) transferTemplateToDailyPlan(template);
+    return;
+  }
+
+  if (analysis.existingTaskCount > 0 || analysis.duplicateTasks.length > 0 || analysis.conflictingAddedTasks.length > 0) {
     const response = await window.whbr.showMessageBox({
       type: 'question',
-      title: '当前日期已有任务',
-      message: `${targetDate} 已有 ${existingTaskCount} 条任务，本模板将再添加 ${template.items.length} 条。`,
-      detail: '可以直接追加，也可以转到编排页面批量调整任务内容、详情、时间和日期。',
-      buttons: ['继续追加', '转到编排', '取消'],
+      title: '确认批量添加任务',
+      message: `${targetDate} 已有 ${analysis.existingTaskCount} 条任务。模板共 ${analysis.totalCount} 条，其中 ${analysis.duplicateTasks.length} 条重复，实际新增 ${analysis.addedTasks.length} 条。`,
+      detail: `${taskBatchConflictDetail(analysis)} 也可以先转到编排页面批量调整内容、详情、时间和日期。`,
+      buttons: ['确认新增', '转到编排', '取消'],
       defaultId: 2,
       cancelId: 2
     });
@@ -5571,39 +5743,17 @@ async function confirmTaskTemplateSelection() {
 
   confirmReuseTemplateButton.disabled = true;
   try {
-    const baseOrder = nextOrderForDate(targetDate);
-    const timestamp = Date.now();
-    const clonedTasks = template.items.map((task, index) => ({
-      id: `template-reuse-${timestamp}-${index}`,
-      title: task.title,
-      startTime: task.startTime,
-      endTime: task.endTime,
-      date: targetDate,
-      weekday: weekdayFromDate(targetDate),
-      location: '',
-      typeId: task.typeId,
-      type: task.type,
-      planDetails: task.planDetails || '',
-      details: '',
-      status: '未评价',
-      rawText: '',
-      sheetName: '',
-      source: 'task-template',
-      splitParentId: '',
-      timeModel: START_DATE_TIME_MODEL,
-      statusPolicy: AUTO_AFTER_END_STATUS_POLICY,
-      order: baseOrder + index * 10,
-      isDraft: false
-    }));
-
-    tasks = mergeTasks(tasks, clonedTasks);
+    tasks = [...tasks, ...analysis.addedTasks];
     activePlanningDates.add(targetDate);
     await saveState();
     const embedded = reuseTemplateEmbedded;
     closeReuseTemplateModal();
     if (embedded) closeTemplateMenuModal();
     renderTasks({ scrollToCurrent: targetDate === formatLocalDate(currentEffectiveNow) });
-    setStatus(`已使用模板“${template.name}”为 ${targetDate} 添加 ${clonedTasks.length} 条任务。`, '', 5000);
+    const conflictText = analysis.conflictingAddedTasks.length > 0
+      ? `，其中 ${analysis.conflictingAddedTasks.length} 条存在时间冲突`
+      : '';
+    setStatus(`已使用模板“${template.name}”为 ${targetDate} 新增 ${analysis.addedTasks.length} 条任务，跳过 ${analysis.duplicateTasks.length} 条重复任务${conflictText}。`, '', 6000);
   } catch (error) {
     confirmReuseTemplateButton.disabled = false;
     setStatus(`使用模板创建任务失败：${error.message || String(error)}`, 'error', 5000);
@@ -8902,6 +9052,8 @@ async function startApp() {
 
   await initializeAppData();
   await refreshSystemTime();
+  await maybeGenerateScheduledPlans(currentEffectiveNow || new Date());
+  restartAutoPlanningScheduler();
   setInterval(refreshSystemTime, 1000);
 
   // These status probes are useful in Settings, but they do not need to

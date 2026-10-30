@@ -27,8 +27,8 @@ function render(payload = {}) {
   countdownLabel.textContent = payload.countdownLabel || '剩余时间';
   countdown.textContent = payload.countdown || '--:--';
   taskDetails.textContent = payload.details || (active ? '暂未填写事前计划或备注' : '最小化时会自动显示当前进行的任务。');
-  interactionHint.textContent = isInteractionUnlocked ? '拖动中 · 松开恢复穿透' : 'Ctrl + Alt + 左键拖动';
-  bubble.title = isInteractionUnlocked ? '正在移动：松开 Ctrl、Alt 和左键后恢复点击穿透' : '点击可穿透；按住 Ctrl 和 Alt 后，用左键拖动气泡';
+  interactionHint.textContent = isInteractionUnlocked ? '拖动中 · 松开恢复穿透' : 'Ctrl + 滚轮按下拖动';
+  bubble.title = isInteractionUnlocked ? '正在移动：松开 Ctrl 和鼠标滚轮后恢复点击穿透' : '点击可穿透；按住 Ctrl 后，用鼠标滚轮按下并拖动气泡';
   requestWindowResize();
 }
 
@@ -80,4 +80,12 @@ window.floatingTask.onFlash(({ times = 5 } = {}) => {
   bubble.style.animationIterationCount = String(Math.max(1, Number(times) || 5));
   void bubble.offsetWidth;
   bubble.classList.add('is-flashing');
+});
+
+// Do not let Chromium start its own middle-click auto-scroll while the main
+// process is using the middle button for the explicit Ctrl-drag gesture.
+bubble.addEventListener('mousedown', (event) => {
+  if (event.button !== 1) return;
+  event.preventDefault();
+  event.stopPropagation();
 });

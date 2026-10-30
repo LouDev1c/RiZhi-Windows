@@ -3923,6 +3923,15 @@ h2 {
   max-width: 260px;
 }
 
+.auto-planning-run-summary {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #ffffff;
+  line-height: 1.55;
+}
+
 .auto-planning-weekday-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -382,7 +382,7 @@
 
               <section class="panel settings-daily-plan-generation-panel hidden" data-settings-panel="daily-plan-generation">
                 <h2>每日计划生成</h2>
-                <p class="muted">按星期模板在指定时间生成明日安排。启动时如果发现今天尚未生成，会自动补充；不会覆盖已经生成或手动修改的日期。</p>
+                <p class="muted">按星期模板在指定时间生成明日安排。已有任务会保留；完全相同的任务不会重复添加，其他模板任务会继续补充并显示时间冲突。</p>
                 <section class="auto-planning-panel" aria-labelledby="autoPlanningTitle">
                   <div class="auto-planning-head">
                     <div>
@@ -398,6 +398,7 @@
                     <span>生成明日计划的时间</span>
                     <input id="autoPlanningGenerationTime" type="time" step="60" value="21:00" />
                   </label>
+                  <p id="autoPlanningRunSummary" class="auto-planning-run-summary muted"></p>
                   <div id="autoPlanningWeekdayGrid" class="auto-planning-weekday-grid"></div>
                   <div class="auto-planning-actions">
                     <p id="autoPlanningStatus" class="form-feedback hidden" role="status"></p>
@@ -436,7 +437,7 @@
                   <h3 id="fixedShortcutTitle">固定快捷键</h3>
                   <p class="muted">这些常用操作不能修改。</p>
                   <div class="fixed-shortcut-list">
-                    <div class="fixed-shortcut-item"><span>拖动气泡</span><kbd>Ctrl + Alt + 左键</kbd></div>
+                    <div class="fixed-shortcut-item"><span>拖动气泡</span><kbd>Ctrl + 滚轮按下</kbd></div>
                     <div class="fixed-shortcut-item"><span>复制</span><kbd>Ctrl+C</kbd></div>
                     <div class="fixed-shortcut-item"><span>粘贴</span><kbd>Ctrl+V</kbd></div>
                     <div class="fixed-shortcut-item"><span>剪切</span><kbd>Ctrl+X</kbd></div>

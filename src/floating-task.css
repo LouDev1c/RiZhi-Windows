@@ -23,15 +23,12 @@ html, body { width: 100%; min-height: 0; margin: 0; overflow: hidden; }
   background: linear-gradient(135deg, var(--bubble-bg-start), var(--bubble-bg-end));
   box-shadow: 0 12px 32px rgba(var(--bubble-accent-rgb), .24), inset 0 1px rgba(255, 255, 255, .8);
   user-select: none;
-  /* The window ignores mouse events normally. Keeping this a drag region lets
-     the already-armed Ctrl+Alt+left-click begin native dragging immediately. */
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
   transition: opacity .18s ease, filter .18s ease, box-shadow .18s ease;
 }
 
 .task-bubble.is-hovering:not(.is-unlocked) { opacity: .22; filter: saturate(.72) blur(.45px); }
 .task-bubble.is-unlocked { cursor: grab; opacity: 1; filter: none; box-shadow: 0 12px 32px rgba(var(--bubble-accent-rgb), .32), inset 0 1px rgba(255, 255, 255, .8); }
-.task-bubble.is-unlocked:active { cursor: grabbing; }
 
 .bubble-header { display: flex; align-items: center; gap: 6px; color: var(--bubble-strong); font-size: 11px; font-weight: 700; }
 .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bubble-accent); box-shadow: 0 0 0 3px rgba(var(--bubble-accent-rgb), .16); }

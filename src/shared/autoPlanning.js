@@ -35,7 +35,10 @@
       if (!normalizedDate || !record || typeof record !== 'object') return;
       generatedDates[normalizedDate] = {
         templateId: String(record.templateId || '').trim(),
-        generatedAt: String(record.generatedAt || '').trim()
+        generatedAt: String(record.generatedAt || '').trim(),
+        addedCount: nonNegativeInteger(record.addedCount),
+        duplicateCount: nonNegativeInteger(record.duplicateCount),
+        existingTaskCount: nonNegativeInteger(record.existingTaskCount)
       };
     });
 
@@ -65,6 +68,63 @@
     return dates;
   }
 
+  function nextGenerationAt(config, value) {
+    if (!config || !config.enabled) return null;
+    const now = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+    if (Number.isNaN(now.getTime())) return null;
+    const generationMinutes = taskTimeUtils.timeToMinutes(normalizeGenerationTime(config.generationTime));
+    const next = new Date(now.getTime());
+    next.setHours(Math.floor(generationMinutes / 60), generationMinutes % 60, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    return next;
+  }
+
+  function partitionTemplateItemsForDate(existingTasks, templateItems, date) {
+    const seen = new Set((Array.isArray(existingTasks) ? existingTasks : [])
+      .map((task) => planItemIdentity(task, date))
+      .filter(Boolean));
+    const missingItems = [];
+    const duplicateItems = [];
+
+    (Array.isArray(templateItems) ? templateItems : []).forEach((item) => {
+      const identity = planItemIdentity(item, date);
+      if (!identity || seen.has(identity)) {
+        duplicateItems.push(item);
+        return;
+      }
+      seen.add(identity);
+      missingItems.push(item);
+    });
+
+    return { missingItems, duplicateItems };
+  }
+
+  function planItemIdentity(value, date) {
+    if (!value || typeof value !== 'object') return '';
+    const normalizedDate = dateUtils.normalizeStrictDate(date || value.date);
+    const startMinutes = taskTimeUtils.timeToMinutes(value.startTime);
+    const endMinutes = taskTimeUtils.timeToMinutes(value.endTime);
+    const title = comparableText(value.title);
+    if (!normalizedDate || startMinutes === null || endMinutes === null || !title) return '';
+    return [
+      normalizedDate,
+      startMinutes,
+      endMinutes,
+      title,
+      comparableText(value.planDetails),
+      comparableText(value.typeId || value.type)
+    ].join('|');
+  }
+
+  function comparableText(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  }
+
+  function nonNegativeInteger(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+  }
+
   function pruneGeneratedDates(generatedDates, referenceDate, keepDays = 400) {
     const threshold = dateUtils.shiftDate(referenceDate, -Math.max(1, Number(keepDays) || 400));
     return Object.fromEntries(Object.entries(generatedDates || {}).filter(([date]) => (
@@ -76,8 +136,11 @@
     DEFAULT_GENERATION_TIME,
     WEEKDAY_KEYS,
     datesDueForGeneration,
+    nextGenerationAt,
     normalizeAutoPlanning,
     normalizeGenerationTime,
+    partitionTemplateItemsForDate,
+    planItemIdentity,
     pruneGeneratedDates,
     templateIdForDate
   };
