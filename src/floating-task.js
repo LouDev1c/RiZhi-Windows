@@ -1,6 +1,5 @@
 const bubble = document.querySelector('#bubble');
 const stateText = document.querySelector('#stateText');
-const interactionHint = document.querySelector('#interactionHint');
 const taskTitle = document.querySelector('#taskTitle');
 const taskTime = document.querySelector('#taskTime');
 const countdownLabel = document.querySelector('#countdownLabel');
@@ -27,8 +26,7 @@ function render(payload = {}) {
   countdownLabel.textContent = payload.countdownLabel || '剩余时间';
   countdown.textContent = payload.countdown || '--:--';
   taskDetails.textContent = payload.details || (active ? '暂未填写事前计划或备注' : '最小化时会自动显示当前进行的任务。');
-  interactionHint.textContent = isInteractionUnlocked ? '拖动中 · 松开恢复穿透' : 'Ctrl + 滚轮按下拖动';
-  bubble.title = isInteractionUnlocked ? '正在移动：松开 Ctrl 和鼠标滚轮后恢复点击穿透' : '点击可穿透；按住 Ctrl 后，用鼠标滚轮按下并拖动气泡';
+  bubble.removeAttribute('title');
   requestWindowResize();
 }
 

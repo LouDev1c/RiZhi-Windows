@@ -37,9 +37,6 @@ let floatingTaskInputBuffer = '';
 let floatingTaskDragArmed = false;
 let floatingTaskDragOffset = null;
 let floatingTaskMiddleButtonDown = false;
-let floatingTaskTracePath = '';
-let floatingTaskTraceLastMoveAt = 0;
-let floatingTaskTraceLastDragAt = 0;
 let autoUpdater = null;
 let qrCode = null;
 let reminderWindow = null;
@@ -303,68 +300,8 @@ function formatVersionLabel(version) {
   return text.startsWith('v') ? text : `v${text}`;
 }
 
-async function initializeFloatingTaskTrace() {
-  try {
-    const directory = app.isPackaged
-      ? path.join(app.getPath('userData'), 'diagnostics')
-      : path.join(__dirname, 'diagnostics');
-    await fs.mkdir(directory, { recursive: true });
-    floatingTaskTracePath = path.join(directory, 'floating-task-drag.log');
-    await fs.writeFile(
-      floatingTaskTracePath,
-      `${JSON.stringify({ at: new Date().toISOString(), event: 'trace-started' })}\n`,
-      'utf8'
-    );
-    console.log(`RiZhi: floating-task drag trace: ${floatingTaskTracePath}`);
-  } catch (error) {
-    console.warn('RiZhi: unable to initialize floating-task drag trace:', error.message);
-  }
-}
-
-function getFloatingTaskTraceSnapshot() {
-  const snapshot = {
-    dockEdge: floatingTaskDockEdge || null,
-    dockDisplayId: floatingTaskDockDisplayId,
-    dockOrigin: floatingTaskDockOrigin,
-    interactionUnlocked: floatingTaskInteractionUnlocked,
-    dragArmed: floatingTaskDragArmed,
-    middleButtonDown: floatingTaskMiddleButtonDown
-  };
-  if (floatingTaskWindow && !floatingTaskWindow.isDestroyed()) {
-    snapshot.windowBounds = floatingTaskWindow.getBounds();
-    snapshot.contentBounds = floatingTaskWindow.getContentBounds();
-  }
-  try {
-    snapshot.pointer = screen.getCursorScreenPoint();
-  } catch {
-    // Pointer data is diagnostic only; never interfere with normal behavior.
-  }
-  return snapshot;
-}
-
-function traceFloatingTask(event, data = {}) {
-  if (!floatingTaskTracePath) return;
-  const record = {
-    at: new Date().toISOString(),
-    event,
-    ...getFloatingTaskTraceSnapshot(),
-    data
-  };
-  void fs.appendFile(floatingTaskTracePath, `${JSON.stringify(record)}\n`, 'utf8').catch((error) => {
-    console.warn('RiZhi: unable to write floating-task trace:', error.message);
-  });
-}
-
-function traceFloatingTaskMove(event) {
-  const now = Date.now();
-  if (now - floatingTaskTraceLastMoveAt < 80) return;
-  floatingTaskTraceLastMoveAt = now;
-  traceFloatingTask(event);
-}
-
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-  void initializeFloatingTaskTrace();
   createWindow();
   startFloatingTaskInputMonitor();
   createTray();
@@ -509,7 +446,6 @@ function createFloatingTaskWindow() {
     floatingTaskWindowReady = false;
   });
   floatingTaskWindow.on('moved', () => {
-    traceFloatingTaskMove('window-moved');
     if (floatingTaskInteractionUnlocked) return;
     scheduleFloatingTaskDockCheck();
   });
@@ -556,7 +492,6 @@ function dockFloatingTaskIfNearEdge() {
   const area = display.workArea;
   const areaRight = area.x + area.width;
   const areaBottom = area.y + area.height;
-  traceFloatingTask('dock-check', { windowBounds, visualBounds: bounds, displayId: display.id, workArea: area });
   // The bubble never collapses into an edge tab. Dragging beyond a display
   // simply returns the full card to that display's nearest visible edge.
   floatingTaskDockEdge = '';
@@ -574,9 +509,6 @@ function dockFloatingTaskIfNearEdge() {
   if (topGap <= snapDistance) y = area.y;
   else if (bottomGap <= snapDistance) y = areaBottom - bounds.height;
   if (x !== bounds.x || y !== bounds.y) setFloatingTaskPosition(x, y);
-  if (x !== bounds.x || y !== bounds.y) {
-    traceFloatingTask('dock-snap', { from: bounds, to: { x, y }, displayId: display.id });
-  }
   setFloatingTaskInteractionUnlocked(false);
   sendFloatingTaskUpdate();
 }
@@ -671,7 +603,6 @@ function revealFloatingTaskForDrag() {
   // Releasing Ctrl alone can then return the card to the same edge and corner.
   floatingTaskPositionIgnoreUntil = Date.now() + 120;
   if (Number.isFinite(origin.x) && Number.isFinite(origin.y)) {
-    traceFloatingTask('reveal-for-drag', { from: bounds, to: origin, displayId: display.id });
     floatingTaskWindow.setPosition(Math.round(origin.x), Math.round(origin.y));
   } else {
     console.warn('RiZhi: ignored invalid floating-task reveal position.', origin);
@@ -683,7 +614,6 @@ function revealFloatingTaskForDrag() {
 function setFloatingTaskPosition(x, y) {
   if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    traceFloatingTask('invalid-position', { x, y });
     console.warn('RiZhi: ignored invalid floating-task position.', { x, y });
     return;
   }
@@ -736,7 +666,6 @@ while ($true) {
     stdio: ['ignore', 'pipe', 'pipe']
   });
   floatingTaskInputMonitor = monitor;
-  traceFloatingTask('input-monitor-started', { executable });
   monitor.stdout.setEncoding('utf8');
   monitor.stdout.on('data', (chunk) => {
     floatingTaskInputBuffer += chunk;
@@ -753,14 +682,12 @@ while ($true) {
     const message = String(chunk || '').trim();
     if (message) {
       console.warn('RiZhi: floating-task input monitor:', message);
-      traceFloatingTask('input-monitor-error', { message });
     }
   });
   monitor.on('exit', (code) => {
     if (floatingTaskInputMonitor === monitor) {
       floatingTaskInputMonitor = null;
       floatingTaskInputBuffer = '';
-      traceFloatingTask('input-monitor-exit', { code });
       if (!isQuitting) {
         console.warn(`RiZhi: floating-task input monitor stopped (code ${code ?? 'unknown'}); retrying.`);
         setTimeout(startFloatingTaskInputMonitor, 1000);
@@ -770,7 +697,6 @@ while ($true) {
   monitor.on('error', (error) => {
     if (floatingTaskInputMonitor === monitor) {
       console.warn('RiZhi: floating-task input monitor unavailable:', error.message);
-      traceFloatingTask('input-monitor-unavailable', { message: error.message });
       floatingTaskInputMonitor = null;
       floatingTaskInputBuffer = '';
     }
@@ -793,7 +719,6 @@ function handleFloatingTaskInputState(ctrlDown, middleButtonDown) {
     const visualBounds = getFloatingTaskVisualBounds();
     if (!visualBounds || !isPointInsideBounds(point, visualBounds)) return;
 
-    traceFloatingTask('drag-armed', { ctrlDown, middleButtonDown, point, visualBounds });
     clearTimeout(floatingTaskDockTimer);
     clearTimeout(floatingTaskMoveAnimationTimer);
     revealFloatingTaskForDrag();
@@ -813,7 +738,6 @@ function handleFloatingTaskInputState(ctrlDown, middleButtonDown) {
         x: point.x - bounds.x,
         y: point.y - bounds.y
       };
-      traceFloatingTask('drag-start', { point, bounds, offset: floatingTaskDragOffset });
     }
     floatingTaskMiddleButtonDown = true;
     if (floatingTaskDockEdge) {
@@ -827,10 +751,6 @@ function handleFloatingTaskInputState(ctrlDown, middleButtonDown) {
     const nextX = point.x - floatingTaskDragOffset.x;
     const nextY = point.y - floatingTaskDragOffset.y;
     if (Number.isFinite(nextX) && Number.isFinite(nextY)) {
-      if (Date.now() - floatingTaskTraceLastDragAt >= 80) {
-        floatingTaskTraceLastDragAt = Date.now();
-        traceFloatingTask('drag-move', { point, offset: floatingTaskDragOffset, to: { x: nextX, y: nextY } });
-      }
       floatingTaskWindow.setPosition(Math.round(nextX), Math.round(nextY));
     }
     return;
@@ -841,7 +761,6 @@ function handleFloatingTaskInputState(ctrlDown, middleButtonDown) {
   floatingTaskMiddleButtonDown = false;
   floatingTaskDragOffset = null;
   if (ctrlDown) return;
-  traceFloatingTask('drag-finished', { dockEdge: floatingTaskDockEdge || null });
   setFloatingTaskInteractionUnlocked(false);
   if (floatingTaskDockEdge) {
     setFloatingTaskDockedPosition({ animate: true });
@@ -893,7 +812,6 @@ function startFloatingTaskPointerMonitor() {
 function moveFloatingTaskTo(x, y, { animate = false, onComplete } = {}) {
   if (!floatingTaskWindow || floatingTaskWindow.isDestroyed()) return;
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    traceFloatingTask('invalid-animation-target', { x, y });
     console.warn('RiZhi: ignored invalid floating-task animation target.', { x, y });
     return;
   }
@@ -1198,7 +1116,6 @@ ipcMain.on('floating-task:resize', (event, requestedSize = {}) => {
   floatingTaskVisualSize = { width, height };
   const bounds = floatingTaskWindow.getBounds();
   if (bounds.width === width && bounds.height === height) return;
-  traceFloatingTask('resize-window', { from: bounds, to: { width, height } });
   // setContentSize applies a second DPI conversion on some Windows displays,
   // making the transparent window much larger than the visible card. Bounds
   // are already expressed in the same display coordinates used for dragging.

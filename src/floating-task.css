@@ -32,8 +32,6 @@ html, body { width: 100%; min-height: 0; margin: 0; overflow: hidden; }
 
 .bubble-header { display: flex; align-items: center; gap: 6px; color: var(--bubble-strong); font-size: 11px; font-weight: 700; }
 .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bubble-accent); box-shadow: 0 0 0 3px rgba(var(--bubble-accent-rgb), .16); }
-.interaction-hint { margin-left: auto; color: var(--bubble-muted); font-size: 10px; font-weight: 600; opacity: 0; transition: opacity .18s ease; }
-.task-bubble.is-hovering .interaction-hint, .task-bubble.is-unlocked .interaction-hint { opacity: 1; }
 .task-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; height: 43px; margin-top: 6px; gap: 8px; }
 .task-bubble:not(.has-countdown) .task-summary { grid-template-columns: minmax(0, 1fr); }
 .task-bubble:not(.has-countdown) .countdown-row { display: none; }
